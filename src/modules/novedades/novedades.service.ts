@@ -68,6 +68,9 @@ export class NovedadesService {
     if (filtro.estado) qb.andWhere('n.estado = :estado', { estado: filtro.estado });
     if (filtro.fechaDesde) qb.andWhere('n.fecha >= :desde', { desde: filtro.fechaDesde });
     if (filtro.fechaHasta) qb.andWhere('n.fecha <= :hasta', { hasta: filtro.fechaHasta });
+    if (filtro.impactoFinanciero) qb.andWhere('n.impactoFinanciero = :impacto', { impacto: filtro.impactoFinanciero });
+    if (filtro.gastoPagado !== undefined)
+      qb.andWhere('n.gastoPagado = :gastoPagado', { gastoPagado: filtro.gastoPagado });
 
     qb.orderBy('n.creadoEn', 'DESC');
 

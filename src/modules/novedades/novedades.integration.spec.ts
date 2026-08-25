@@ -173,3 +173,65 @@ describe('NovedadesService (integración) — RDN-07', () => {
     ).rejects.toThrow('solo el Administrador puede cerrarla o anularla');
   });
 });
+
+/** Valida el filtro por impactoFinanciero/gastoPagado (Track B5, pantalla Gastos del frontend). */
+describe('NovedadesService (integración) — listar con filtro impactoFinanciero/gastoPagado', () => {
+  let testApp: TestApp;
+  let service: NovedadesService;
+
+  beforeAll(async () => {
+    testApp = await bootstrapTestApp();
+    service = testApp.app.get(NovedadesService);
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(async () => {
+    await limpiarBaseDeDatos(testApp.dataSource);
+  });
+
+  async function crearNovedadPendiente() {
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const dto: CreateNovedadDto = {
+      inmuebleId: inmueble.id,
+      descripcion: 'Gasto de prueba',
+      fecha: new Date().toISOString().slice(0, 10),
+      responsableSugerido: ResponsableSugerido.INMOBILIARIA,
+    };
+    return service.crear(dto, 'recepcion@test.com');
+  }
+
+  it('impactoFinanciero=GASTO_INMOBILIARIA excluye PENDIENTE y CARGO_ARRENDATARIO', async () => {
+    const gasto = await crearNovedadPendiente();
+    await service.aprobarGastoInmobiliaria(gasto.id, { monto: 100000, concepto: 'Aseo' }, 'admin@test.com');
+
+    const cargo = await crearNovedadPendiente();
+    await testApp.dataSource
+      .getRepository(Novedad)
+      .update(cargo.id, { impactoFinanciero: ImpactoFinanciero.CARGO_ARRENDATARIO });
+
+    await crearNovedadPendiente(); // queda PENDIENTE
+
+    const resultado = await service.listar({ impactoFinanciero: ImpactoFinanciero.GASTO_INMOBILIARIA });
+    expect(resultado.total).toBe(1);
+    expect(resultado.data[0].id).toBe(gasto.id);
+  });
+
+  it('gastoPagado=false trae solo los gastos aprobados y aún no pagados', async () => {
+    const gastoPagado = await crearNovedadPendiente();
+    await service.aprobarGastoInmobiliaria(gastoPagado.id, { monto: 50000, concepto: 'Pintura' }, 'admin@test.com');
+    await service.pagarGastoInmobiliaria(gastoPagado.id, { medioPago: MedioPago.EFECTIVO }, 'admin@test.com');
+
+    const gastoPendiente = await crearNovedadPendiente();
+    await service.aprobarGastoInmobiliaria(gastoPendiente.id, { monto: 70000, concepto: 'Plomería' }, 'admin@test.com');
+
+    const resultado = await service.listar({
+      impactoFinanciero: ImpactoFinanciero.GASTO_INMOBILIARIA,
+      gastoPagado: false,
+    });
+    expect(resultado.total).toBe(1);
+    expect(resultado.data[0].id).toBe(gastoPendiente.id);
+  });
+});
