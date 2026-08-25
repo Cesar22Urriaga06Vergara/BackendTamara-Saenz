@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo RECAUDO-01 de la auditoría: la mora se calculaba y se mostraba en cartera, pero
@@ -15,16 +15,17 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * lo que el default 'CAPITAL' es también correcto semánticamente para los datos existentes.
  */
 export class MoraCobrable1786770000000 implements MigrationInterface {
-    name = 'MoraCobrable1786770000000'
+  name = 'MoraCobrable1786770000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`obligacion\` ADD \`valorMoraPagada\` decimal(12,2) NOT NULL DEFAULT '0.00'`);
-        await queryRunner.query(`ALTER TABLE \`aplicacion_pago\` ADD \`concepto\` enum ('CAPITAL', 'MORA') NOT NULL DEFAULT 'CAPITAL'`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`obligacion\` ADD \`valorMoraPagada\` decimal(12,2) NOT NULL DEFAULT '0.00'`);
+    await queryRunner.query(
+      `ALTER TABLE \`aplicacion_pago\` ADD \`concepto\` enum ('CAPITAL', 'MORA') NOT NULL DEFAULT 'CAPITAL'`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`aplicacion_pago\` DROP COLUMN \`concepto\``);
-        await queryRunner.query(`ALTER TABLE \`obligacion\` DROP COLUMN \`valorMoraPagada\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`aplicacion_pago\` DROP COLUMN \`concepto\``);
+    await queryRunner.query(`ALTER TABLE \`obligacion\` DROP COLUMN \`valorMoraPagada\``);
+  }
 }

@@ -1,12 +1,4 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  ManyToOne,
-  OneToMany,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Contrato } from '../../contratos/entities/contrato.entity';
 import { DetallePago } from './detalle-pago.entity';
 import { AplicacionPago } from './aplicacion-pago.entity';

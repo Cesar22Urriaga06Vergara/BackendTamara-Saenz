@@ -198,18 +198,6 @@ export class ObligacionesService {
   }
 
   /**
-   * Mora "en vivo": % mensual prorrateado por días de atraso tras el periodo de gracia, sobre
-   * el capital pendiente actual.
-   *
-   * Hallazgo MORA-01 de la auditoría: el ejemplo oficial de la especificación (§11.1) define
-   * la gracia como días de calendario INCLUSIVOS contando desde `fechaVencimiento` — con
-   * fecha de pago 10-ago y 5 días de gracia, el período de gracia es 10,11,12,13,14 (5 días)
-   * y "la mora inicia el 15 de agosto". Es decir, el ÚLTIMO día de gracia es
-   * `fechaVencimiento + diasGracia - 1`, no `fechaVencimiento + diasGracia` — la versión
-   * anterior usaba este último valor como frontera, lo que trataba el día 15 como un sexto
-   * día de gracia y subestimaba en 1 la mora de toda obligación morosa.
-   */
-  /**
    * TypeORM hidrata una columna `type: 'date'` como STRING "YYYY-MM-DD", no como `Date`
    * (`DateUtils.mixedDateToDateString` en el driver), pese a que el tipo TS declarado en la
    * entidad es `Date`. `new Date("YYYY-MM-DD")` interpreta ese string como medianoche UTC
@@ -325,7 +313,11 @@ export class ObligacionesService {
    */
   async congelarMora(id: string, historial: HistorialTasaMora[], manager: EntityManager): Promise<number> {
     const repo = manager.getRepository(Obligacion);
-    const obligacion = await repo.createQueryBuilder('o').setLock('pessimistic_write').where('o.id = :id', { id }).getOneOrFail();
+    const obligacion = await repo
+      .createQueryBuilder('o')
+      .setLock('pessimistic_write')
+      .where('o.id = :id', { id })
+      .getOneOrFail();
 
     const pendiente = this.moraPendiente(obligacion, historial);
     const congelada = Math.max(Number(obligacion.valorMoraAcumulada), this.calcularMoraViva(obligacion, historial));
@@ -339,7 +331,11 @@ export class ObligacionesService {
   /** Aplica un abono a la mora pendiente (usado por RecaudoService dentro de una transacción, tercer destino tras Canon→Novedad). */
   async aplicarAbonoMora(id: string, monto: number, manager: EntityManager): Promise<Obligacion> {
     const repo = manager.getRepository(Obligacion);
-    const obligacion = await repo.createQueryBuilder('o').setLock('pessimistic_write').where('o.id = :id', { id }).getOneOrFail();
+    const obligacion = await repo
+      .createQueryBuilder('o')
+      .setLock('pessimistic_write')
+      .where('o.id = :id', { id })
+      .getOneOrFail();
     obligacion.valorMoraPagada = Number(obligacion.valorMoraPagada) + monto;
     return repo.save(obligacion);
   }
@@ -347,7 +343,11 @@ export class ObligacionesService {
   /** Revierte exactamente un abono de mora previamente aplicado (usado al anular un recibo). Nunca queda en negativo. */
   async revertirAbonoMora(id: string, monto: number, manager: EntityManager): Promise<Obligacion> {
     const repo = manager.getRepository(Obligacion);
-    const obligacion = await repo.createQueryBuilder('o').setLock('pessimistic_write').where('o.id = :id', { id }).getOneOrFail();
+    const obligacion = await repo
+      .createQueryBuilder('o')
+      .setLock('pessimistic_write')
+      .where('o.id = :id', { id })
+      .getOneOrFail();
     obligacion.valorMoraPagada = Math.max(0, Number(obligacion.valorMoraPagada) - monto);
     return repo.save(obligacion);
   }
@@ -429,6 +429,35 @@ export class ObligacionesService {
           : EstadoObligacion.PARCIAL;
 
     return repo.save(obligacion);
+  }
+
+  /**
+   * Decisión de negocio RDN-04 / hallazgo CONT-05 de la auditoría: cuando un contrato
+   * termina antes de los periodos que `generarCanonesMensuales` ya generó por adelantado
+   * (`horizonteMesesCanon`), esas obligaciones CANON futuras quedaban `PENDIENTE`
+   * indefinidamente — cartera fantasma de un contrato que ya no existe. Se anulan aquí de
+   * forma automática, pero SOLO las que siguen `PENDIENTE` (sin ningún abono): una
+   * obligación con abono parcial (`PARCIAL`) es deuda real ya generada durante la vigencia
+   * del contrato y no debe ocultarse anulándola (§8.3 — la anulación no es un mecanismo para
+   * esconder deuda que no se desea cobrar). Se ejecuta dentro de la misma transacción que
+   * `ContratosService.terminar()`, propagando su `manager`.
+   */
+  async anularCanonPosteriorATerminacion(contratoId: string, fechaFin: Date, manager: EntityManager): Promise<number> {
+    const repo = manager.getRepository(Obligacion);
+    const canonesFuturos = await repo
+      .createQueryBuilder('o')
+      .where('o.contratoId = :contratoId', { contratoId })
+      .andWhere('o.tipo = :tipo', { tipo: TipoObligacion.CANON })
+      .andWhere('o.estado = :estado', { estado: EstadoObligacion.PENDIENTE })
+      .andWhere('o.fechaVencimiento > :fechaFin', { fechaFin })
+      .getMany();
+
+    for (const obligacion of canonesFuturos) {
+      obligacion.estado = EstadoObligacion.ANULADA;
+      obligacion.motivoAnulacion = 'Contrato terminado antes de este periodo (anulación automática).';
+      await repo.save(obligacion);
+    }
+    return canonesFuturos.length;
   }
 
   private primerDiaMes(fecha: Date): Date {

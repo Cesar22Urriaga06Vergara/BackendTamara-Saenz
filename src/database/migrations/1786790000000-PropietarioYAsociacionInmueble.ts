@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo PROP-01 de la auditoría: la entidad Propietario exigida por §4 de la especificación
@@ -17,10 +17,10 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  *    NOT NULL + FK.
  */
 export class PropietarioYAsociacionInmueble1786790000000 implements MigrationInterface {
-    name = 'PropietarioYAsociacionInmueble1786790000000'
+  name = 'PropietarioYAsociacionInmueble1786790000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE \`propietario\` (
                 \`id\` varchar(36) NOT NULL,
                 \`nombre\` varchar(200) NOT NULL,
@@ -34,28 +34,29 @@ export class PropietarioYAsociacionInmueble1786790000000 implements MigrationInt
             ) ENGINE=InnoDB
         `);
 
-        await queryRunner.query(`INSERT INTO \`propietario\` (\`id\`, \`nombre\`, \`esInmobiliaria\`) VALUES (UUID(), 'INMOBILIARIA', 1)`);
+    await queryRunner.query(
+      `INSERT INTO \`propietario\` (\`id\`, \`nombre\`, \`esInmobiliaria\`) VALUES (UUID(), 'INMOBILIARIA', 1)`,
+    );
 
-        await queryRunner.query(`ALTER TABLE \`inmueble\` ADD \`propietarioId\` varchar(36) NULL`);
-        await queryRunner.query(`
+    await queryRunner.query(`ALTER TABLE \`inmueble\` ADD \`propietarioId\` varchar(36) NULL`);
+    await queryRunner.query(`
             UPDATE \`inmueble\`
             SET \`propietarioId\` = (SELECT \`id\` FROM \`propietario\` WHERE \`esInmobiliaria\` = 1 LIMIT 1)
             WHERE \`propietarioId\` IS NULL
         `);
-        await queryRunner.query(`ALTER TABLE \`inmueble\` MODIFY \`propietarioId\` varchar(36) NOT NULL`);
-        await queryRunner.query(`CREATE INDEX \`IDX_inmueble_propietarioId\` ON \`inmueble\` (\`propietarioId\`)`);
-        await queryRunner.query(`
+    await queryRunner.query(`ALTER TABLE \`inmueble\` MODIFY \`propietarioId\` varchar(36) NOT NULL`);
+    await queryRunner.query(`CREATE INDEX \`IDX_inmueble_propietarioId\` ON \`inmueble\` (\`propietarioId\`)`);
+    await queryRunner.query(`
             ALTER TABLE \`inmueble\`
             ADD CONSTRAINT \`FK_inmueble_propietario\`
             FOREIGN KEY (\`propietarioId\`) REFERENCES \`propietario\`(\`id\`) ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`inmueble\` DROP FOREIGN KEY \`FK_inmueble_propietario\``);
-        await queryRunner.query(`DROP INDEX \`IDX_inmueble_propietarioId\` ON \`inmueble\``);
-        await queryRunner.query(`ALTER TABLE \`inmueble\` DROP COLUMN \`propietarioId\``);
-        await queryRunner.query(`DROP TABLE \`propietario\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`inmueble\` DROP FOREIGN KEY \`FK_inmueble_propietario\``);
+    await queryRunner.query(`DROP INDEX \`IDX_inmueble_propietarioId\` ON \`inmueble\``);
+    await queryRunner.query(`ALTER TABLE \`inmueble\` DROP COLUMN \`propietarioId\``);
+    await queryRunner.query(`DROP TABLE \`propietario\``);
+  }
 }

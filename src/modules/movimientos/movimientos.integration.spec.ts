@@ -125,9 +125,7 @@ describe('MovimientosService (integración)', () => {
         registradoPorEmail: 'test@test.com',
       });
 
-      await expect(service.reversarManual(original.id, 'motivo', 'admin@test.com')).rejects.toThrow(
-        /recibo asociado/,
-      );
+      await expect(service.reversarManual(original.id, 'motivo', 'admin@test.com')).rejects.toThrow(/recibo asociado/);
     });
   });
 });

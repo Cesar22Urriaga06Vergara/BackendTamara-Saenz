@@ -67,6 +67,14 @@ export class EmpresaService {
    * anterior sobre los días ya transcurridos bajo ella, y solo aplicar la nueva desde hoy.
    * Si ya existe una fila vigente desde el día de hoy (dos cambios el mismo día), se actualiza
    * esa misma fila en vez de crear una segunda entrada para la misma fecha de vigencia.
+   *
+   * Decisión de negocio RDN-08: las condiciones de mora se mantienen GLOBALES (una sola
+   * tasa/gracia vigente para todos los contratos a la vez), no configurables por contrato
+   * individual. El riesgo real que motivaba la pregunta — recalcular retroactivamente sin
+   * dejar rastro de qué tasa aplicaba en qué fecha — ya queda cerrado por el versionado
+   * histórico de arriba. No hay evidencia de necesidad real de tasas distintas por contrato,
+   * y añadirlo introduciría complejidad significativa (¿qué tasa rige un contrato sin tasa
+   * propia asignada? ¿se puede cambiar a mitad de la vigencia?) sin un caso de uso concreto.
    */
   async actualizarParametros(dto: UpdateEmpresaDto): Promise<Empresa> {
     return this.dataSource.transaction(async (manager) => {
@@ -76,19 +84,24 @@ export class EmpresaService {
 
       const nuevoDiasGracia = dto.diasGraciaMora ?? actual.diasGraciaMora;
       const nuevoPorcentaje = dto.porcentajeMoraMensual ?? Number(actual.porcentajeMoraMensual);
-      const cambiaTasa = nuevoDiasGracia !== actual.diasGraciaMora || nuevoPorcentaje !== Number(actual.porcentajeMoraMensual);
+      const cambiaTasa =
+        nuevoDiasGracia !== actual.diasGraciaMora || nuevoPorcentaje !== Number(actual.porcentajeMoraMensual);
 
       if (cambiaTasa) {
         const historialRepo = manager.getRepository(HistorialTasaMora);
         const hoy = this.hoyComoFechaColumna();
-        const filaDeHoy = await historialRepo.findOne({ where: { vigenteDesde: hoy as any } });
+        const filaDeHoy = await historialRepo.findOne({ where: { vigenteDesde: hoy } });
         if (filaDeHoy) {
           filaDeHoy.diasGraciaMora = nuevoDiasGracia;
           filaDeHoy.porcentajeMoraMensual = nuevoPorcentaje;
           await historialRepo.save(filaDeHoy);
         } else {
           await historialRepo.save(
-            historialRepo.create({ diasGraciaMora: nuevoDiasGracia, porcentajeMoraMensual: nuevoPorcentaje, vigenteDesde: hoy as any }),
+            historialRepo.create({
+              diasGraciaMora: nuevoDiasGracia,
+              porcentajeMoraMensual: nuevoPorcentaje,
+              vigenteDesde: hoy as any,
+            }),
           );
         }
       }

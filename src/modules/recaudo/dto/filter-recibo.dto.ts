@@ -11,10 +11,12 @@ export class FilterReciboDto extends PaginacionDto {
   @IsOptional() @IsString() fechaHasta?: string;
 
   @Transform(({ value }) => (value === '' ? undefined : value))
-  @IsOptional() @IsEnum(EstadoRecibo)
+  @IsOptional()
+  @IsEnum(EstadoRecibo)
   estado?: EstadoRecibo;
 
   @Transform(({ value }) => (value === '' ? undefined : value))
-  @IsOptional() @IsEnum(MedioPago)
+  @IsOptional()
+  @IsEnum(MedioPago)
   medioPago?: MedioPago;
 }

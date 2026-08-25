@@ -13,8 +13,11 @@ import { paginar } from '../../common/utils/paginar.util';
  * Servicio genérico reutilizado por Clientes y Codeudores (mismo comportamiento
  * de directorio, entidades TypeORM distintas). Se instancia dos veces desde el módulo.
  */
-class PersonasServiceBase<T extends { id: string; numeroDocumento: string; activo: boolean }> {
-  constructor(private readonly repo: Repository<T>, private readonly etiqueta: string) {}
+export class PersonasServiceBase<T extends { id: string; numeroDocumento: string; activo: boolean }> {
+  constructor(
+    private readonly repo: Repository<T>,
+    private readonly etiqueta: string,
+  ) {}
 
   async crear(dto: CreatePersonaDto): Promise<T> {
     const existe = await this.repo.findOne({ where: { numeroDocumento: dto.numeroDocumento } as any });

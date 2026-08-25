@@ -10,7 +10,10 @@ class DescuentoDepositoInput {
 
 /** Liquidación del depósito en custodia al terminar un contrato. */
 export class LiquidarDepositoDto {
-  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => DescuentoDepositoInput)
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DescuentoDepositoInput)
   descuentos?: DescuentoDepositoInput[];
 
   /** Requerido únicamente cuando queda saldo por devolver (validado en el service). */

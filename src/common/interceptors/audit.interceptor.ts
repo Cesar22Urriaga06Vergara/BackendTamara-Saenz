@@ -45,7 +45,6 @@ export class AuditInterceptor implements NestInterceptor {
           ipOrigen: req.ip,
         })
         .catch((err) => {
-          // eslint-disable-next-line no-console
           console.error('[AUDITORIA] Error al persistir registro:', err.message);
         });
     };

@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo MORA-02 de la auditoría: la tasa de mora (`Empresa.diasGraciaMora`/
@@ -14,10 +14,10 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * día del cambio, sin tocar ni reescribir las anteriores.
  */
 export class HistorialTasaMora1786880000000 implements MigrationInterface {
-    name = 'HistorialTasaMora1786880000000'
+  name = 'HistorialTasaMora1786880000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE \`historial_tasa_mora\` (
                 \`id\` varchar(36) NOT NULL,
                 \`diasGraciaMora\` int NOT NULL,
@@ -28,18 +28,17 @@ export class HistorialTasaMora1786880000000 implements MigrationInterface {
             ) ENGINE=InnoDB
         `);
 
-        const empresas = await queryRunner.query(`SELECT diasGraciaMora, porcentajeMoraMensual FROM \`empresa\` LIMIT 1`);
-        const diasGraciaMora = empresas[0]?.diasGraciaMora ?? 5;
-        const porcentajeMoraMensual = empresas[0]?.porcentajeMoraMensual ?? 1.5;
+    const empresas = await queryRunner.query(`SELECT diasGraciaMora, porcentajeMoraMensual FROM \`empresa\` LIMIT 1`);
+    const diasGraciaMora = empresas[0]?.diasGraciaMora ?? 5;
+    const porcentajeMoraMensual = empresas[0]?.porcentajeMoraMensual ?? 1.5;
 
-        await queryRunner.query(
-            `INSERT INTO \`historial_tasa_mora\` (\`id\`, \`diasGraciaMora\`, \`porcentajeMoraMensual\`, \`vigenteDesde\`) VALUES (UUID(), ?, ?, '2000-01-01')`,
-            [diasGraciaMora, porcentajeMoraMensual],
-        );
-    }
+    await queryRunner.query(
+      `INSERT INTO \`historial_tasa_mora\` (\`id\`, \`diasGraciaMora\`, \`porcentajeMoraMensual\`, \`vigenteDesde\`) VALUES (UUID(), ?, ?, '2000-01-01')`,
+      [diasGraciaMora, porcentajeMoraMensual],
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE \`historial_tasa_mora\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE \`historial_tasa_mora\``);
+  }
 }

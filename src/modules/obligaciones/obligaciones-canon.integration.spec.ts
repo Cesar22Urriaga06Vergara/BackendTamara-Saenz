@@ -1,6 +1,13 @@
 import { ObligacionesService } from './obligaciones.service';
 import { Obligacion, TipoObligacion } from './entities/obligacion.entity';
-import { bootstrapTestApp, limpiarBaseDeDatos, crearCliente, crearInmueble, crearContrato, TestApp } from '../../../test/test-app';
+import {
+  bootstrapTestApp,
+  limpiarBaseDeDatos,
+  crearCliente,
+  crearInmueble,
+  crearContrato,
+  TestApp,
+} from '../../../test/test-app';
 
 /** Valida CONC-01: dos generaciones de canon concurrentes para el mismo contrato nunca duplican. */
 describe('ObligacionesService.generarCanonesMensuales (integración) — CONC-01', () => {

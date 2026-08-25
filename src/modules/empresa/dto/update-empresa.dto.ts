@@ -7,15 +7,26 @@ export class UpdateEmpresaDto {
   @IsOptional() @IsString() direccion?: string;
   @IsOptional() @IsString() telefono?: string;
 
-  @IsOptional() @IsInt() @Min(0) @Max(60)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(60)
   diasGraciaMora?: number;
 
-  @IsOptional() @IsNumber() @Min(0) @Max(100)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
   porcentajeMoraMensual?: number;
 
-  @IsOptional() @IsInt() @Min(1) @Max(24)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
   horizonteMesesCanon?: number;
 
-  @IsOptional() @IsNumber() @Min(0)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   saldoInicialCaja?: number;
 }

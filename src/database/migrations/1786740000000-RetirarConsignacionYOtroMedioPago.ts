@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Retira 'CONSIGNACION' y 'OTRO' del enum de MedioPago (H10, auditoría de control
@@ -8,14 +8,17 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * por lo que no requiere backfill de datos.
  */
 export class RetirarConsignacionYOtroMedioPago1786740000000 implements MigrationInterface {
-    name = 'RetirarConsignacionYOtroMedioPago1786740000000'
+  name = 'RetirarConsignacionYOtroMedioPago1786740000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`detalle_pago\` MODIFY \`medioPago\` enum ('EFECTIVO', 'TRANSFERENCIA') NOT NULL`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE \`detalle_pago\` MODIFY \`medioPago\` enum ('EFECTIVO', 'TRANSFERENCIA') NOT NULL`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`detalle_pago\` MODIFY \`medioPago\` enum ('EFECTIVO', 'TRANSFERENCIA', 'CONSIGNACION', 'OTRO') NOT NULL`);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE \`detalle_pago\` MODIFY \`medioPago\` enum ('EFECTIVO', 'TRANSFERENCIA', 'CONSIGNACION', 'OTRO') NOT NULL`,
+    );
+  }
 }

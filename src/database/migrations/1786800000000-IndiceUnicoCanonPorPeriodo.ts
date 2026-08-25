@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo CONC-01 de la auditoría: `generarCanonesMensuales` verificaba "¿ya existe canon
@@ -19,24 +19,23 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * de GENERATED ALWAYS AS por considerarlo no determinista (depende del locale de sesión).
  */
 export class IndiceUnicoCanonPorPeriodo1786800000000 implements MigrationInterface {
-    name = 'IndiceUnicoCanonPorPeriodo1786800000000'
+  name = 'IndiceUnicoCanonPorPeriodo1786800000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             ALTER TABLE \`obligacion\`
             ADD \`claveUnicaCanon\` varchar(80)
             GENERATED ALWAYS AS (
                 CASE WHEN \`tipo\` = 'CANON' THEN CONCAT(\`contratoId\`, '_', CAST(\`periodo\` AS CHAR)) ELSE NULL END
             ) STORED
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             CREATE UNIQUE INDEX \`IDX_obligacion_canon_unico\` ON \`obligacion\` (\`claveUnicaCanon\`)
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP INDEX \`IDX_obligacion_canon_unico\` ON \`obligacion\``);
-        await queryRunner.query(`ALTER TABLE \`obligacion\` DROP COLUMN \`claveUnicaCanon\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP INDEX \`IDX_obligacion_canon_unico\` ON \`obligacion\``);
+    await queryRunner.query(`ALTER TABLE \`obligacion\` DROP COLUMN \`claveUnicaCanon\``);
+  }
 }

@@ -1,6 +1,7 @@
 import { ContratosService } from './contratos.service';
 import { Contrato, EstadoContrato } from './entities/contrato.entity';
 import { Inmueble, EstadoInmueble } from '../inmuebles/entities/inmueble.entity';
+import { Obligacion, EstadoObligacion, TipoObligacion } from '../obligaciones/entities/obligacion.entity';
 import { TerminarContratoDto } from './dto/terminar-contrato.dto';
 import { ReactivarContratoDto } from './dto/reactivar-contrato.dto';
 import { CreateContratoDto } from './dto/create-contrato.dto';
@@ -33,11 +34,11 @@ describe('ContratosService (integración) — CONT-01/CONT-02', () => {
   });
 
   function dtoTerminar(fechaFin: string, motivoTerminacion: string): TerminarContratoDto {
-    return { fechaFin, motivoTerminacion } as TerminarContratoDto;
+    return { fechaFin, motivoTerminacion };
   }
 
   function dtoReactivar(motivo: string): ReactivarContratoDto {
-    return { motivo } as ReactivarContratoDto;
+    return { motivo };
   }
 
   async function recargarContrato(id: string) {
@@ -71,7 +72,11 @@ describe('ContratosService (integración) — CONT-01/CONT-02', () => {
       motivoTerminacion: 'Cliente se mudó',
     });
 
-    const reactivado = await service.reactivar(contrato.id, dtoReactivar('El cliente decidió continuar'), 'admin@test.com');
+    const reactivado = await service.reactivar(
+      contrato.id,
+      dtoReactivar('El cliente decidió continuar'),
+      'admin@test.com',
+    );
 
     expect(reactivado.estado).toBe(EstadoContrato.ACTIVO);
 
@@ -102,9 +107,9 @@ describe('ContratosService (integración) — CONT-01/CONT-02', () => {
     // Otro contrato ACTIVO ya ocupa el mismo inmueble mientras tanto.
     await crearContrato(testApp.dataSource, cliente, inmueble, { estado: EstadoContrato.ACTIVO });
 
-    await expect(
-      service.reactivar(contratoTerminado.id, dtoReactivar('motivo'), 'admin@test.com'),
-    ).rejects.toThrow('El inmueble ya está ocupado por otro contrato activo; no se puede reactivar.');
+    await expect(service.reactivar(contratoTerminado.id, dtoReactivar('motivo'), 'admin@test.com')).rejects.toThrow(
+      'El inmueble ya está ocupado por otro contrato activo; no se puede reactivar.',
+    );
   });
 
   it('CONT-02: el historial conserva TODOS los ciclos terminar→reactivar→terminar, sin perder el primero', async () => {
@@ -158,7 +163,9 @@ describe('ContratosService (integración) — BD-03', () => {
 
     await crearContrato(testApp.dataSource, cliente1, inmueble, { estado: EstadoContrato.ACTIVO });
 
-    await expect(crearContrato(testApp.dataSource, cliente2, inmueble, { estado: EstadoContrato.ACTIVO })).rejects.toThrow();
+    await expect(
+      crearContrato(testApp.dataSource, cliente2, inmueble, { estado: EstadoContrato.ACTIVO }),
+    ).rejects.toThrow();
   });
 
   it('permite varios contratos TERMINADO históricos sobre el mismo inmueble sin chocar entre sí ni con uno ACTIVO', async () => {
@@ -215,7 +222,7 @@ describe('ContratosService (integración) — CONT-04', () => {
       codeudorIds: [codeudor.id],
       inmuebleId: inmueble.id,
       fechaInicio,
-    } as CreateContratoDto;
+    };
   }
 
   it('sin diaPago explícito, lo deriva del día de fechaInicio', async () => {
@@ -233,5 +240,96 @@ describe('ContratosService (integración) — CONT-04', () => {
     dto.diaPago = 10;
     const contrato = await service.crear(dto);
     expect(contrato.diaPago).toBe(10);
+  });
+});
+
+/**
+ * Valida RDN-04 / CONT-05: al terminar un contrato, el canon ya generado por adelantado
+ * para periodos POSTERIORES a la fecha de fin se anula automáticamente (sin importar cuál
+ * sea el motivo de terminación) — pero solo si sigue PENDIENTE sin ningún abono. Una
+ * obligación con abono parcial no debe tocarse: representa deuda real ya generada.
+ */
+describe('ContratosService (integración) — CONT-05', () => {
+  let testApp: TestApp;
+  let service: ContratosService;
+
+  beforeAll(async () => {
+    testApp = await bootstrapTestApp();
+    service = testApp.app.get(ContratosService);
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(async () => {
+    await limpiarBaseDeDatos(testApp.dataSource);
+  });
+
+  async function crearCanon(
+    contrato: Contrato,
+    fechaVencimiento: Date,
+    overrides: Partial<Obligacion> = {},
+  ): Promise<Obligacion> {
+    const repo = testApp.dataSource.getRepository(Obligacion);
+    return repo.save(
+      repo.create({
+        contrato,
+        tipo: TipoObligacion.CANON,
+        concepto: 'Canon de prueba',
+        periodo: fechaVencimiento,
+        fechaVencimiento,
+        valorOriginal: 500000,
+        estado: EstadoObligacion.PENDIENTE,
+        ...overrides,
+      }),
+    );
+  }
+
+  it('anula el canon PENDIENTE con vencimiento posterior a la fecha de terminación', async () => {
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource, { estado: EstadoInmueble.OCUPADO });
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { estado: EstadoContrato.ACTIVO });
+
+    const canonFuturo = await crearCanon(contrato, new Date('2026-06-01'));
+
+    await service.terminar(
+      contrato.id,
+      { fechaFin: '2026-05-01', motivoTerminacion: 'Cliente se mudó' },
+      'admin@test.com',
+    );
+
+    const recargado = await testApp.dataSource.getRepository(Obligacion).findOneByOrFail({ id: canonFuturo.id });
+    expect(recargado.estado).toBe(EstadoObligacion.ANULADA);
+    expect(recargado.motivoAnulacion).toContain('Contrato terminado');
+  });
+
+  it('NO anula el canon con vencimiento anterior o igual a la fecha de terminación (deuda real ya generada)', async () => {
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource, { estado: EstadoInmueble.OCUPADO });
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { estado: EstadoContrato.ACTIVO });
+
+    const canonVencido = await crearCanon(contrato, new Date('2026-04-01'));
+
+    await service.terminar(contrato.id, { fechaFin: '2026-05-01', motivoTerminacion: 'motivo' }, 'admin@test.com');
+
+    const recargado = await testApp.dataSource.getRepository(Obligacion).findOneByOrFail({ id: canonVencido.id });
+    expect(recargado.estado).toBe(EstadoObligacion.PENDIENTE);
+  });
+
+  it('NO anula el canon futuro si ya tiene un abono parcial (no oculta deuda real, §8.3)', async () => {
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource, { estado: EstadoInmueble.OCUPADO });
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { estado: EstadoContrato.ACTIVO });
+
+    const canonParcial = await crearCanon(contrato, new Date('2026-06-01'), {
+      estado: EstadoObligacion.PARCIAL,
+      valorAbonado: 100000,
+    });
+
+    await service.terminar(contrato.id, { fechaFin: '2026-05-01', motivoTerminacion: 'motivo' }, 'admin@test.com');
+
+    const recargado = await testApp.dataSource.getRepository(Obligacion).findOneByOrFail({ id: canonParcial.id });
+    expect(recargado.estado).toBe(EstadoObligacion.PARCIAL);
   });
 });

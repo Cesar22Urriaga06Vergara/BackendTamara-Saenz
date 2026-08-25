@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo RECAUDO-03 de la auditoría: el recibo (API + PDF) no podía mostrar concepto,
@@ -10,14 +10,13 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * porque las aplicaciones ya existentes (previas a este campo) no tienen ese dato histórico.
  */
 export class SaldoPosteriorEnAplicacionPago1786810000000 implements MigrationInterface {
-    name = 'SaldoPosteriorEnAplicacionPago1786810000000'
+  name = 'SaldoPosteriorEnAplicacionPago1786810000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`aplicacion_pago\` ADD \`saldoPosterior\` decimal(12,2) NULL`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`aplicacion_pago\` ADD \`saldoPosterior\` decimal(12,2) NULL`);
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`aplicacion_pago\` DROP COLUMN \`saldoPosterior\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`aplicacion_pago\` DROP COLUMN \`saldoPosterior\``);
+  }
 }

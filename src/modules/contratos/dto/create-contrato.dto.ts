@@ -1,4 +1,15 @@
-import { ArrayNotEmpty, IsArray, IsDateString, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 /**
  * Creación de contrato por búsqueda estricta: se referencian IDs ya existentes
@@ -7,7 +18,9 @@ import { ArrayNotEmpty, IsArray, IsDateString, IsInt, IsNumber, IsOptional, IsSt
 export class CreateContratoDto {
   @IsUUID() clienteId: string;
 
-  @IsArray() @ArrayNotEmpty() @IsUUID('4', { each: true })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
   codeudorIds: string[];
 
   @IsUUID() inmuebleId: string;

@@ -20,15 +20,20 @@ export class TypeOrmExceptionFilter implements ExceptionFilter {
 
     const mapeo: Record<string, () => HttpException> = {
       ER_DUP_ENTRY: () => new ConflictException('Ya existe un registro con ese valor único.'),
-      ER_NO_REFERENCED_ROW_2: () =>
-        new HttpException('El registro referenciado no existe o ya fue eliminado.', 400),
+      ER_NO_REFERENCED_ROW_2: () => new HttpException('El registro referenciado no existe o ya fue eliminado.', 400),
       ER_ROW_IS_REFERENCED_2: () =>
-        new HttpException('No es posible completar la operación: hay registros relacionados que dependen de este.', 409),
+        new HttpException(
+          'No es posible completar la operación: hay registros relacionados que dependen de este.',
+          409,
+        ),
       ER_BAD_NULL_ERROR: () => new HttpException('Falta un valor obligatorio para completar el registro.', 400),
       ER_DATA_TOO_LONG: () => new HttpException('Uno de los valores enviados excede la longitud permitida.', 400),
     };
 
-    const httpException = codigo && mapeo[codigo] ? mapeo[codigo]() : new HttpException('Error al procesar la solicitud en base de datos.', 400);
+    const httpException =
+      codigo && mapeo[codigo]
+        ? mapeo[codigo]()
+        : new HttpException('Error al procesar la solicitud en base de datos.', 400);
     const status = httpException.getStatus();
     const body = httpException.getResponse();
 

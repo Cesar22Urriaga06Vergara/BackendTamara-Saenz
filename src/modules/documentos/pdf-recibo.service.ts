@@ -3,6 +3,7 @@ import * as PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { EstadoRecibo, ReciboCaja } from '../recaudo/entities/recibo-caja.entity';
+import { ConceptoAplicacion } from '../recaudo/entities/aplicacion-pago.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
 
 /**
@@ -60,22 +61,19 @@ export class PdfReciboService {
       }
 
       // ---- Encabezado corporativo (siempre desde la ficha de Empresa en BD) ----
-      doc
-        .fillColor('#1A1A1A')
-        .fontSize(16)
-        .font('Helvetica-Bold')
-        .text(empresa.nombre, { align: 'left' });
-      doc
-        .fillColor('#CFA052')
-        .fontSize(10)
-        .font('Helvetica-Oblique')
-        .text(`"${empresa.slogan}"`, { align: 'left' });
+      doc.fillColor('#1A1A1A').fontSize(16).font('Helvetica-Bold').text(empresa.nombre, { align: 'left' });
+      doc.fillColor('#CFA052').fontSize(10).font('Helvetica-Oblique').text(`"${empresa.slogan}"`, { align: 'left' });
       doc.fillColor('#4A4D52').fontSize(9).font('Helvetica').text(`NIT: ${empresa.nit}`);
       if (empresa.direccion) doc.text(`Dirección: ${empresa.direccion}`);
       if (empresa.telefono) doc.text(`Tel: ${empresa.telefono}`);
       doc.moveDown(0.5 * espaciado.escala);
       doc.y = Math.max(doc.y, yTrasLogo);
-      doc.strokeColor('#CFA052').lineWidth(2).moveTo(40, doc.y).lineTo(tamano[0] - 40, doc.y).stroke();
+      doc
+        .strokeColor('#CFA052')
+        .lineWidth(2)
+        .moveTo(40, doc.y)
+        .lineTo(tamano[0] - 40, doc.y)
+        .stroke();
       doc.moveDown(1 * espaciado.escala);
 
       // ---- Título y consecutivo ----
@@ -100,7 +98,10 @@ export class PdfReciboService {
             .fillColor('#DC2626')
             .font('Helvetica')
             .fontSize(8.5)
-            .text(`Motivo de anulación: ${recibo.motivoAnulacion}`, margenX, doc.y, { width: anchoBanner, align: 'center' });
+            .text(`Motivo de anulación: ${recibo.motivoAnulacion}`, margenX, doc.y, {
+              width: anchoBanner,
+              align: 'center',
+            });
         }
       }
 
@@ -137,7 +138,11 @@ export class PdfReciboService {
       const yFila2 = yDivisor + espaciado.gapPeque;
       const altoTarjeta = yFila2 + altoFila2 + padFilaTarjeta - yTarjeta;
 
-      doc.roundedRect(margenX, yTarjeta, anchoContenido, altoTarjeta, 4).lineWidth(0.75).strokeColor('#D9D9D9').stroke();
+      doc
+        .roundedRect(margenX, yTarjeta, anchoContenido, altoTarjeta, 4)
+        .lineWidth(0.75)
+        .strokeColor('#D9D9D9')
+        .stroke();
       doc
         .strokeColor('#E5E7EB')
         .lineWidth(0.5)
@@ -155,7 +160,12 @@ export class PdfReciboService {
       };
       celdaEtiquetaValor('Arrendatario:', contrato.cliente?.nombreCompleto ?? '—', xColIzq, yFila1);
       celdaEtiquetaValor('Documento:', contrato.cliente?.numeroDocumento ?? '—', xColDer, yFila1);
-      celdaEtiquetaValor('Inmueble:', `${contrato.inmueble?.direccion ?? ''} (${contrato.inmueble?.barrio ?? ''})`, xColIzq, yFila2);
+      celdaEtiquetaValor(
+        'Inmueble:',
+        `${contrato.inmueble?.direccion ?? ''} (${contrato.inmueble?.barrio ?? ''})`,
+        xColIzq,
+        yFila2,
+      );
       celdaEtiquetaValor('Fecha de emisión:', this.formatoFechaCO(recibo.creadoEn), xColDer, yFila2);
 
       doc.y = yTarjeta + altoTarjeta + espaciado.gapPostTarjeta;
@@ -238,15 +248,21 @@ export class PdfReciboService {
         let yFilaAplic = yEncabezadoAplic + altoFilaTabla;
         recibo.aplicaciones.forEach((aplicacion) => {
           const obligacion = aplicacion.obligacion as any;
-          const tipo = aplicacion.concepto === 'MORA' ? 'Mora' : 'Capital';
+          const tipo = aplicacion.concepto === ConceptoAplicacion.MORA ? 'Mora' : 'Capital';
           doc.font('Helvetica').fontSize(8.5).fillColor('#1A1A1A');
-          doc.text(obligacion?.concepto ?? '—', colConceptoX + 6, yFilaAplic + 6, { width: colConceptoW - 6, align: 'left' });
+          doc.text(obligacion?.concepto ?? '—', colConceptoX + 6, yFilaAplic + 6, {
+            width: colConceptoW - 6,
+            align: 'left',
+          });
           doc.text(obligacion?.periodo ? this.formatoPeriodoCO(obligacion.periodo) : '—', colPeriodoX, yFilaAplic + 6, {
             width: colPeriodoW - 6,
             align: 'left',
           });
           doc.text(tipo, colTipoX, yFilaAplic + 6, { width: colTipoW - 6, align: 'left' });
-          doc.text(this.formatoMonedaCO(aplicacion.montoAplicado), colValorX, yFilaAplic + 6, { width: colValorW - 6, align: 'right' });
+          doc.text(this.formatoMonedaCO(aplicacion.montoAplicado), colValorX, yFilaAplic + 6, {
+            width: colValorW - 6,
+            align: 'right',
+          });
           doc.text(
             aplicacion.saldoPosterior != null ? this.formatoMonedaCO(aplicacion.saldoPosterior) : '—',
             colSaldoX,
@@ -254,13 +270,23 @@ export class PdfReciboService {
             { width: colSaldoW - 6, align: 'right' },
           );
           yFilaAplic += altoFilaTabla;
-          doc.strokeColor('#E5E7EB').lineWidth(0.5).moveTo(margenX, yFilaAplic).lineTo(margenX + anchoContenido, yFilaAplic).stroke();
+          doc
+            .strokeColor('#E5E7EB')
+            .lineWidth(0.5)
+            .moveTo(margenX, yFilaAplic)
+            .lineTo(margenX + anchoContenido, yFilaAplic)
+            .stroke();
         });
 
         doc.y = yFilaAplic + espaciado.gapPeque;
       }
 
-      doc.strokeColor('#4A4D52').lineWidth(1).moveTo(margenX, doc.y).lineTo(tamano[0] - margenX, doc.y).stroke();
+      doc
+        .strokeColor('#4A4D52')
+        .lineWidth(1)
+        .moveTo(margenX, doc.y)
+        .lineTo(tamano[0] - margenX, doc.y)
+        .stroke();
       doc.moveDown(0.5 * espaciado.escala);
 
       doc
@@ -272,27 +298,39 @@ export class PdfReciboService {
       if (Number(recibo.excedente) > 0) {
         // Por defecto el excedente se devuelve como cambio; solo queda como saldo a favor
         // cuando el cliente lo pidió expresamente (RDN-01, hallazgo RECAUDO-02 de la auditoría).
-        const etiquetaExcedente = recibo.excedenteComoSaldoFavor ? 'Excedente aplicado a saldo a favor' : 'Cambio entregado';
+        const etiquetaExcedente = recibo.excedenteComoSaldoFavor
+          ? 'Excedente aplicado a saldo a favor'
+          : 'Cambio entregado';
         doc
           .font('Helvetica')
           .fontSize(9)
           .fillColor('#CFA052')
-          .text(`${etiquetaExcedente}: ${this.formatoMonedaCO(recibo.excedente)}`, margenX, doc.y, { width: anchoContenido });
+          .text(`${etiquetaExcedente}: ${this.formatoMonedaCO(recibo.excedente)}`, margenX, doc.y, {
+            width: anchoContenido,
+          });
       }
 
       doc.moveDown(2 * espaciado.escala);
-      doc.fillColor('#4A4D52').fontSize(8).font('Helvetica-Oblique').text('Documento generado por el sistema — no requiere firma manuscrita.', { align: 'center' });
+      doc
+        .fillColor('#4A4D52')
+        .fontSize(8)
+        .font('Helvetica-Oblique')
+        .text('Documento generado por el sistema — no requiere firma manuscrita.', { align: 'center' });
 
       doc.end();
     });
   }
 
   private formatoMonedaCO(valor: number): string {
-    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(valor));
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(
+      Number(valor),
+    );
   }
 
   private formatoFechaCO(fecha: Date): string {
-    return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(fecha));
+    return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(
+      new Date(fecha),
+    );
   }
 
   /**

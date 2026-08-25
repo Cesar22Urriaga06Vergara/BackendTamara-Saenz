@@ -44,11 +44,7 @@ export class UsuariosService {
 
   /** Incluye passwordHash (select:false por defecto) — uso exclusivo de AuthService. */
   buscarPorEmailConPassword(email: string) {
-    return this.repo
-      .createQueryBuilder('u')
-      .addSelect('u.passwordHash')
-      .where('u.email = :email', { email })
-      .getOne();
+    return this.repo.createQueryBuilder('u').addSelect('u.passwordHash').where('u.email = :email', { email }).getOne();
   }
 
   /**
@@ -60,7 +56,8 @@ export class UsuariosService {
     const usuario = await this.obtener(id);
 
     const vaADesactivarse = dto.activo === false && usuario.activo;
-    const vaAPerderRolAdmin = dto.rol !== undefined && dto.rol !== Rol.ADMINISTRADOR && usuario.rol === Rol.ADMINISTRADOR;
+    const vaAPerderRolAdmin =
+      dto.rol !== undefined && dto.rol !== Rol.ADMINISTRADOR && usuario.rol === Rol.ADMINISTRADOR;
 
     if (usuarioActualId && id === usuarioActualId && (vaADesactivarse || vaAPerderRolAdmin)) {
       throw new ForbiddenException('No puedes desactivarte a ti mismo ni quitarte tu propio rol de Administrador.');

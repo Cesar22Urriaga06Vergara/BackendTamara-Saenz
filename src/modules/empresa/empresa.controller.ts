@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Patch, Post, UploadedFile, 
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync, unlinkSync } from 'fs';
 import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { EmpresaService } from './empresa.service';
@@ -13,7 +13,11 @@ import { AuditAction } from '../../common/decorators/audit-action.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
 const CARPETA_LOGOS = './uploads/empresa';
-const MIME_PERMITIDOS = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+// SVG deliberadamente excluido: es un formato ejecutable (puede embeber <script>) y este
+// archivo se sirve luego desde una ruta estática sin autenticación (`/uploads/`, ver
+// `main.ts`) — aceptarlo habilitaría XSS almacenado sobre cualquier visitante que abra el
+// logo directamente. Un logo no necesita ser un formato con capacidad de script.
+const MIME_PERMITIDOS = ['image/png', 'image/jpeg', 'image/jpg'];
 
 @ApiTags('Empresa / Configuración')
 @ApiBearerAuth()
@@ -66,7 +70,7 @@ export class EmpresaController {
       }),
       fileFilter: (_req, file, cb) => {
         if (!MIME_PERMITIDOS.includes(file.mimetype)) {
-          cb(new BadRequestException('Formato de imagen no permitido. Use PNG, JPG o SVG.'), false);
+          cb(new BadRequestException('Formato de imagen no permitido. Use PNG o JPG.'), false);
           return;
         }
         cb(null, true);
@@ -76,6 +80,26 @@ export class EmpresaController {
   )
   actualizarLogo(@UploadedFile() archivo: Express.Multer.File) {
     if (!archivo) throw new BadRequestException('Debe adjuntar un archivo de imagen.');
+    this.verificarMagicBytes(archivo);
     return this.service.actualizarLogo(archivo);
+  }
+
+  /**
+   * `fileFilter` de Multer solo ve el `Content-Type` que el cliente declaró en la petición
+   * multipart, no el contenido real del archivo — un cliente distinto del frontend oficial
+   * podría subir cualquier binario etiquetado como `image/png`. Esta verificación lee los
+   * primeros bytes del archivo YA escrito en disco y confirma que corresponden a la firma
+   * real de PNG/JPEG antes de dejar que `EmpresaService` lo registre; si no coincide, borra
+   * el archivo y rechaza. Defensa en profundidad de bajo costo (el endpoint ya exige rol
+   * Administrador, así que el riesgo de explotación es bajo, pero la verificación es barata).
+   */
+  private verificarMagicBytes(archivo: Express.Multer.File): void {
+    const firma = readFileSync(archivo.path).subarray(0, 8);
+    const esPng = firma[0] === 0x89 && firma[1] === 0x50 && firma[2] === 0x4e && firma[3] === 0x47;
+    const esJpeg = firma[0] === 0xff && firma[1] === 0xd8 && firma[2] === 0xff;
+    if (!esPng && !esJpeg) {
+      unlinkSync(archivo.path);
+      throw new BadRequestException('El contenido del archivo no corresponde a una imagen PNG o JPG válida.');
+    }
   }
 }

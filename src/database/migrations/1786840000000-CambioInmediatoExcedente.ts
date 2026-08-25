@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * RDN-01 resuelta: por defecto, el excedente de un pago se devuelve de inmediato como cambio
@@ -11,15 +11,14 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * entregado" si se dejara en `false`, así que se hace backfill explícito a `true` para ellos.
  */
 export class CambioInmediatoExcedente1786840000000 implements MigrationInterface {
-    name = 'CambioInmediatoExcedente1786840000000'
+  name = 'CambioInmediatoExcedente1786840000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`recibo_caja\` ADD \`excedenteComoSaldoFavor\` tinyint NOT NULL DEFAULT 0`);
-        await queryRunner.query(`UPDATE \`recibo_caja\` SET \`excedenteComoSaldoFavor\` = 1 WHERE \`excedente\` > 0`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`recibo_caja\` ADD \`excedenteComoSaldoFavor\` tinyint NOT NULL DEFAULT 0`);
+    await queryRunner.query(`UPDATE \`recibo_caja\` SET \`excedenteComoSaldoFavor\` = 1 WHERE \`excedente\` > 0`);
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`recibo_caja\` DROP COLUMN \`excedenteComoSaldoFavor\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`recibo_caja\` DROP COLUMN \`excedenteComoSaldoFavor\``);
+  }
 }

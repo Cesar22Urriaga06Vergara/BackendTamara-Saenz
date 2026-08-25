@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Inmueble, EstadoInmueble } from './entities/inmueble.entity';
@@ -8,6 +8,7 @@ import { UpdateInmuebleDto } from './dto/update-inmueble.dto';
 import { FilterInmuebleDto } from './dto/filter-inmueble.dto';
 import { ConsecutivoService } from '../empresa/consecutivo.service';
 import { Contrato, EstadoContrato } from '../contratos/entities/contrato.entity';
+import { Rol } from '../../common/enums/roles.enum';
 import { paginar } from '../../common/utils/paginar.util';
 
 @Injectable()
@@ -96,7 +97,12 @@ export class InmueblesService {
    * detrás. La disponibilidad/ocupación es una consecuencia del ciclo de vida del contrato
    * (`ContratosService.crear/reactivar/terminar`), no un campo libre de este endpoint.
    */
-  async actualizar(id: string, dto: UpdateInmuebleDto): Promise<Inmueble> {
+  async actualizar(id: string, dto: UpdateInmuebleDto, rol: string): Promise<Inmueble> {
+    if ((dto.canonValor !== undefined || dto.depositoValor !== undefined) && rol !== Rol.ADMINISTRADOR) {
+      throw new ForbiddenException(
+        'Solo Administrador puede editar el canon o el depósito de un inmueble (decisión RDN-06).',
+      );
+    }
     return this.dataSource.transaction(async (manager) => {
       const inmueble = await manager
         .createQueryBuilder(Inmueble, 'i')

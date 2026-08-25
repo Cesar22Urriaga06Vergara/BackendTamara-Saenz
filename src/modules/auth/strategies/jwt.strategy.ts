@@ -19,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
+  validate(payload: JwtPayload) {
     // Se inyecta como request.user y es usado por RolesGuard / @CurrentUser
     return { id: payload.sub, email: payload.email, rol: payload.rol };
   }

@@ -53,7 +53,11 @@ describe('NovedadesService (integración) — NOV-01', () => {
 
   it('el pago real genera EXACTAMENTE un movimiento EGRESO con el medio indicado', async () => {
     const novedad = await crearNovedadPendiente();
-    await service.aprobarGastoInmobiliaria(novedad.id, { monto: 200000, concepto: 'Reparación fuga' }, 'admin@test.com');
+    await service.aprobarGastoInmobiliaria(
+      novedad.id,
+      { monto: 200000, concepto: 'Reparación fuga' },
+      'admin@test.com',
+    );
 
     const pagada = await service.pagarGastoInmobiliaria(
       novedad.id,
@@ -74,7 +78,11 @@ describe('NovedadesService (integración) — NOV-01', () => {
 
   it('rechaza pagar un gasto que ya fue pagado (no duplica el movimiento)', async () => {
     const novedad = await crearNovedadPendiente();
-    await service.aprobarGastoInmobiliaria(novedad.id, { monto: 200000, concepto: 'Reparación fuga' }, 'admin@test.com');
+    await service.aprobarGastoInmobiliaria(
+      novedad.id,
+      { monto: 200000, concepto: 'Reparación fuga' },
+      'admin@test.com',
+    );
     await service.pagarGastoInmobiliaria(novedad.id, { medioPago: MedioPago.EFECTIVO }, 'admin@test.com');
 
     await expect(

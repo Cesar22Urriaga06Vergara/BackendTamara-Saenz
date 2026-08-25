@@ -1,8 +1,13 @@
 import { InmueblesService } from '../inmuebles/inmuebles.service';
 import { PropietariosService } from './propietarios.service';
 import { CreateInmuebleDto } from '../inmuebles/dto/create-inmueble.dto';
-import { UpdateInmuebleDto } from '../inmuebles/dto/update-inmueble.dto';
-import { bootstrapTestApp, limpiarBaseDeDatos, obtenerOCrearPropietarioInmobiliaria, TestApp } from '../../../test/test-app';
+import { Rol } from '../../common/enums/roles.enum';
+import {
+  bootstrapTestApp,
+  limpiarBaseDeDatos,
+  obtenerOCrearPropietarioInmobiliaria,
+  TestApp,
+} from '../../../test/test-app';
 
 /** Valida PROP-01: todo inmueble queda asociado a un Propietario (§4), con "INMOBILIARIA" como default. */
 describe('Propietario (integración) — PROP-01', () => {
@@ -28,7 +33,7 @@ describe('Propietario (integración) — PROP-01', () => {
   });
 
   function dtoInmueble(overrides: Partial<CreateInmuebleDto> = {}): CreateInmuebleDto {
-    return { direccion: 'Calle 1', barrio: 'Centro', canonValor: 500000, ...overrides } as CreateInmuebleDto;
+    return { direccion: 'Calle 1', barrio: 'Centro', canonValor: 500000, ...overrides };
   }
 
   it('crear un inmueble sin propietarioId lo asocia por defecto al propietario "INMOBILIARIA"', async () => {
@@ -59,7 +64,7 @@ describe('Propietario (integración) — PROP-01', () => {
     const inmueble = await inmuebles.crear(dtoInmueble());
     const nuevoPropietario = await propietarios.crear({ nombre: 'María Gómez' });
 
-    await inmuebles.actualizar(inmueble.id, { propietarioId: nuevoPropietario.id } as UpdateInmuebleDto);
+    await inmuebles.actualizar(inmueble.id, { propietarioId: nuevoPropietario.id }, Rol.ADMINISTRADOR);
 
     const actualizado = await inmuebles.obtener(inmueble.id);
     expect(actualizado.propietario.id).toBe(nuevoPropietario.id);

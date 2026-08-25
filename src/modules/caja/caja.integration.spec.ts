@@ -78,7 +78,10 @@ describe('CajaService (integración) — CAJA-02', () => {
     });
     // saldoEsperado = 200.000 + 300.000 = 500.000
 
-    const arqueoConFaltante = await caja.registrarArqueo({ saldoContado: 495000, observaciones: 'faltó revisar' }, 'admin@test.com');
+    const arqueoConFaltante = await caja.registrarArqueo(
+      { saldoContado: 495000, observaciones: 'faltó revisar' },
+      'admin@test.com',
+    );
     expect(Number(arqueoConFaltante.saldoEsperado)).toBe(500000);
     expect(Number(arqueoConFaltante.saldoContado)).toBe(495000);
     expect(Number(arqueoConFaltante.diferencia)).toBe(-5000); // faltante

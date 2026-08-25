@@ -41,7 +41,11 @@ export class NovedadesController {
   @Patch(':id/estado')
   @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA)
   @AuditAction({ modulo: 'NOVEDADES', accion: 'CAMBIAR_ESTADO' })
-  cambiarEstado(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CambiarEstadoNovedadDto, @CurrentUser() user: any) {
+  cambiarEstado(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CambiarEstadoNovedadDto,
+    @CurrentUser() user: any,
+  ) {
     return this.service.cambiarEstado(id, dto, user.rol);
   }
 

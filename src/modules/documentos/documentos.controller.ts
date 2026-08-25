@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
+import { FormatoReciboDto } from './dto/formato-recibo.dto';
 import { PdfReciboService } from './pdf-recibo.service';
 import { PdfNovedadService } from './pdf-novedad.service';
 import { ExcelReportesService } from './excel-reportes.service';
@@ -50,7 +51,7 @@ export class DocumentosController {
   @AuditAction({ modulo: 'DOCUMENTOS', accion: 'DESCARGAR_RECIBO_PDF' })
   async descargarReciboPdf(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('formato') formato: 'CARTA' | 'MEDIA_CARTA' = 'CARTA',
+    @Query() { formato = 'CARTA' }: FormatoReciboDto,
     @Res() res: Response,
   ) {
     const recibo = await this.recaudoService.obtener(id);

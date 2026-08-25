@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo BD-03 de la auditoría: nada en la base de datos impedía estructuralmente dos
@@ -14,24 +14,23 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * inmueble) nunca chocan entre sí ni con esta regla.
  */
 export class IndiceUnicoContratoActivoPorInmueble1786860000000 implements MigrationInterface {
-    name = 'IndiceUnicoContratoActivoPorInmueble1786860000000'
+  name = 'IndiceUnicoContratoActivoPorInmueble1786860000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             ALTER TABLE \`contrato\`
             ADD \`claveUnicaInmuebleActivo\` varchar(36)
             GENERATED ALWAYS AS (
                 CASE WHEN \`estado\` = 'ACTIVO' THEN \`inmuebleId\` ELSE NULL END
             ) STORED
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             CREATE UNIQUE INDEX \`IDX_contrato_inmueble_activo_unico\` ON \`contrato\` (\`claveUnicaInmuebleActivo\`)
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP INDEX \`IDX_contrato_inmueble_activo_unico\` ON \`contrato\``);
-        await queryRunner.query(`ALTER TABLE \`contrato\` DROP COLUMN \`claveUnicaInmuebleActivo\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP INDEX \`IDX_contrato_inmueble_activo_unico\` ON \`contrato\``);
+    await queryRunner.query(`ALTER TABLE \`contrato\` DROP COLUMN \`claveUnicaInmuebleActivo\``);
+  }
 }

@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo BD-02 de la auditoría: `movimiento.reciboId/novedadId/contratoId` y
@@ -22,56 +22,55 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * tipo real de las columnas `id` referenciadas — es seguro.
  */
 export class FksRealesReferenciasSueltas1786870000000 implements MigrationInterface {
-    name = 'FksRealesReferenciasSueltas1786870000000'
+  name = 'FksRealesReferenciasSueltas1786870000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`reciboId\` varchar(36) NULL`);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`novedadId\` varchar(36) NULL`);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`contratoId\` varchar(36) NULL`);
-        await queryRunner.query(`ALTER TABLE \`obligacion\` MODIFY \`novedadOrigenId\` varchar(36) NULL`);
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`reciboId\` varchar(36) NULL`);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`novedadId\` varchar(36) NULL`);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`contratoId\` varchar(36) NULL`);
+    await queryRunner.query(`ALTER TABLE \`obligacion\` MODIFY \`novedadOrigenId\` varchar(36) NULL`);
 
-        await queryRunner.query(`CREATE INDEX \`IDX_movimiento_reciboId\` ON \`movimiento\` (\`reciboId\`)`);
-        await queryRunner.query(`CREATE INDEX \`IDX_movimiento_novedadId\` ON \`movimiento\` (\`novedadId\`)`);
-        await queryRunner.query(`CREATE INDEX \`IDX_movimiento_contratoId\` ON \`movimiento\` (\`contratoId\`)`);
-        await queryRunner.query(`CREATE INDEX \`IDX_obligacion_novedadOrigenId\` ON \`obligacion\` (\`novedadOrigenId\`)`);
+    await queryRunner.query(`CREATE INDEX \`IDX_movimiento_reciboId\` ON \`movimiento\` (\`reciboId\`)`);
+    await queryRunner.query(`CREATE INDEX \`IDX_movimiento_novedadId\` ON \`movimiento\` (\`novedadId\`)`);
+    await queryRunner.query(`CREATE INDEX \`IDX_movimiento_contratoId\` ON \`movimiento\` (\`contratoId\`)`);
+    await queryRunner.query(`CREATE INDEX \`IDX_obligacion_novedadOrigenId\` ON \`obligacion\` (\`novedadOrigenId\`)`);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE \`movimiento\`
             ADD CONSTRAINT \`FK_movimiento_recibo\`
             FOREIGN KEY (\`reciboId\`) REFERENCES \`recibo_caja\`(\`id\`) ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE \`movimiento\`
             ADD CONSTRAINT \`FK_movimiento_novedad\`
             FOREIGN KEY (\`novedadId\`) REFERENCES \`novedad\`(\`id\`) ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE \`movimiento\`
             ADD CONSTRAINT \`FK_movimiento_contrato\`
             FOREIGN KEY (\`contratoId\`) REFERENCES \`contrato\`(\`id\`) ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE \`obligacion\`
             ADD CONSTRAINT \`FK_obligacion_novedadOrigen\`
             FOREIGN KEY (\`novedadOrigenId\`) REFERENCES \`novedad\`(\`id\`) ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`obligacion\` DROP FOREIGN KEY \`FK_obligacion_novedadOrigen\``);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` DROP FOREIGN KEY \`FK_movimiento_contrato\``);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` DROP FOREIGN KEY \`FK_movimiento_novedad\``);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` DROP FOREIGN KEY \`FK_movimiento_recibo\``);
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`obligacion\` DROP FOREIGN KEY \`FK_obligacion_novedadOrigen\``);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` DROP FOREIGN KEY \`FK_movimiento_contrato\``);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` DROP FOREIGN KEY \`FK_movimiento_novedad\``);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` DROP FOREIGN KEY \`FK_movimiento_recibo\``);
 
-        await queryRunner.query(`DROP INDEX \`IDX_obligacion_novedadOrigenId\` ON \`obligacion\``);
-        await queryRunner.query(`DROP INDEX \`IDX_movimiento_contratoId\` ON \`movimiento\``);
-        await queryRunner.query(`DROP INDEX \`IDX_movimiento_novedadId\` ON \`movimiento\``);
-        await queryRunner.query(`DROP INDEX \`IDX_movimiento_reciboId\` ON \`movimiento\``);
+    await queryRunner.query(`DROP INDEX \`IDX_obligacion_novedadOrigenId\` ON \`obligacion\``);
+    await queryRunner.query(`DROP INDEX \`IDX_movimiento_contratoId\` ON \`movimiento\``);
+    await queryRunner.query(`DROP INDEX \`IDX_movimiento_novedadId\` ON \`movimiento\``);
+    await queryRunner.query(`DROP INDEX \`IDX_movimiento_reciboId\` ON \`movimiento\``);
 
-        await queryRunner.query(`ALTER TABLE \`obligacion\` MODIFY \`novedadOrigenId\` varchar(255) NULL`);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`contratoId\` varchar(255) NULL`);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`novedadId\` varchar(255) NULL`);
-        await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`reciboId\` varchar(255) NULL`);
-    }
-
+    await queryRunner.query(`ALTER TABLE \`obligacion\` MODIFY \`novedadOrigenId\` varchar(255) NULL`);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`contratoId\` varchar(255) NULL`);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`novedadId\` varchar(255) NULL`);
+    await queryRunner.query(`ALTER TABLE \`movimiento\` MODIFY \`reciboId\` varchar(255) NULL`);
+  }
 }

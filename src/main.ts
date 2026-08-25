@@ -35,19 +35,30 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('ERP Inmobiliario - Inversiones Tamara & Saenz S. En C.')
-    .setDescription('API de control de recaudo, contratos, inmuebles y novedades operativas.')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup(`${prefix}/docs`, app, document);
+  // Swagger expone el esquema completo de la API (todas las rutas, DTOs y formas de
+  // respuesta) sin pasar por JwtAuthGuard/RolesGuard, que solo protegen rutas enrutadas por
+  // Nest — la UI de Swagger se sirve fuera de ese pipeline. Solo se habilita fuera de
+  // producción para no exponer el mapa completo del API a cualquiera con acceso de red.
+  const esProduccion = config.get<string>('NODE_ENV') === 'production';
+  let swaggerHabilitado = false;
+  if (!esProduccion) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('ERP Inmobiliario - Inversiones Tamara & Saenz S. En C.')
+      .setDescription('API de control de recaudo, contratos, inmuebles y novedades operativas.')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup(`${prefix}/docs`, app, document);
+    swaggerHabilitado = true;
+  }
 
   const port = config.get<number>('PORT', 3000);
   await app.listen(port);
-  // eslint-disable-next-line no-console
+
   console.log(`🚀 API Tamara & Saenz corriendo en http://localhost:${port}/${prefix}`);
-  console.log(`📄 Swagger disponible en http://localhost:${port}/${prefix}/docs`);
+  if (swaggerHabilitado) {
+    console.log(`📄 Swagger disponible en http://localhost:${port}/${prefix}/docs`);
+  }
 }
-bootstrap();
+void bootstrap();

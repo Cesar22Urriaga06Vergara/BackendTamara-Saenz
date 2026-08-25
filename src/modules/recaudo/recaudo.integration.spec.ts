@@ -45,11 +45,11 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
   });
 
   function dtoPago(contratoId: string, detallesPago: RegistrarPagoDto['detallesPago']): RegistrarPagoDto {
-    return { contratoId, detallesPago } as RegistrarPagoDto;
+    return { contratoId, detallesPago };
   }
 
   function dtoAnular(motivo: string): AnularReciboDto {
-    return { motivo } as AnularReciboDto;
+    return { motivo };
   }
 
   async function obtenerContrato(id: string): Promise<Contrato> {
@@ -127,9 +127,9 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     expect(recibo.excedenteComoSaldoFavor).toBe(false);
 
     // En su lugar, se devuelve de inmediato como un movimiento de "cambio".
-    const cambio = await testApp.dataSource
-      .getRepository(Movimiento)
-      .findOneOrFail({ where: { reciboId: recibo.id, esReverso: false, concepto: `Cambio entregado — recibo ${recibo.consecutivo}` } });
+    const cambio = await testApp.dataSource.getRepository(Movimiento).findOneOrFail({
+      where: { reciboId: recibo.id, esReverso: false, concepto: `Cambio entregado — recibo ${recibo.consecutivo}` },
+    });
     expect(Number(cambio.monto)).toBe(1000);
     expect(cambio.medioPago).toBe(MedioPago.EFECTIVO);
   });
@@ -142,7 +142,7 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
         contratoId: contrato.id,
         detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 552500 }],
         dejarExcedenteComoSaldoFavor: true,
-      } as RegistrarPagoDto,
+      },
       'admin@test.com',
     );
 
@@ -245,7 +245,7 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
         contratoId: contrato.id,
         detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 552500 }],
         dejarExcedenteComoSaldoFavor: true,
-      } as RegistrarPagoDto,
+      },
       'admin@test.com',
     );
 
@@ -331,7 +331,7 @@ describe('RecaudoService (integración) — RECAUDO-03', () => {
 
     // Canon(400.000) + Novedad(150.000) + Mora(1.500), exacto, sin excedente.
     const recibo = await recaudo.registrarPago(
-      { contratoId: contrato.id, detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 551500 }] } as RegistrarPagoDto,
+      { contratoId: contrato.id, detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 551500 }] },
       'admin@test.com',
     );
 
@@ -426,21 +426,41 @@ describe('RecaudoService (integración) — DEP-01', () => {
     const contrato = await crearContratoTerminadoConDeposito(500000);
 
     await expect(
-      recaudo.liquidarDeposito(contrato.id, { descuentos: [{ concepto: 'Aseo', valor: 100000 }] } as LiquidarDepositoDto, 'admin@test.com'),
+      recaudo.liquidarDeposito(contrato.id, { descuentos: [{ concepto: 'Aseo', valor: 100000 }] }, 'admin@test.com'),
     ).rejects.toThrow('Debe indicar el medio de pago');
   });
 
   it('sin descuentos, devuelve el depósito completo sin crear ningún descuento', async () => {
     const contrato = await crearContratoTerminadoConDeposito(300000);
 
-    const resultado = await recaudo.liquidarDeposito(
-      contrato.id,
-      { medioPago: MedioPago.EFECTIVO } as LiquidarDepositoDto,
-      'admin@test.com',
-    );
+    const resultado = await recaudo.liquidarDeposito(contrato.id, { medioPago: MedioPago.EFECTIVO }, 'admin@test.com');
 
     expect(resultado.valorDescontado).toBe(0);
     expect(resultado.valorDevuelto).toBe(300000);
+
+    const descuentosGuardados = await testApp.dataSource
+      .getRepository(DescuentoDeposito)
+      .find({ where: { contrato: { id: contrato.id } } });
+    expect(descuentosGuardados).toHaveLength(0);
+  });
+
+  /**
+   * Sin esta guardia, una segunda liquidación sobre el mismo contrato no duplicaba el pago
+   * (el depósito ya quedaba en 0 tras la primera), pero sí insertaba una fila `DescuentoDeposito`
+   * duplicada con efecto cero si se reenviaban descuentos — contaminando el rastro de auditoría.
+   */
+  it('rechaza una segunda liquidación sobre el mismo contrato (idempotencia)', async () => {
+    const contrato = await crearContratoTerminadoConDeposito(500000);
+
+    await recaudo.liquidarDeposito(contrato.id, { medioPago: MedioPago.EFECTIVO }, 'admin@test.com');
+
+    await expect(
+      recaudo.liquidarDeposito(
+        contrato.id,
+        { descuentos: [{ concepto: 'Reintento', valor: 50000 }], medioPago: MedioPago.EFECTIVO },
+        'admin@test.com',
+      ),
+    ).rejects.toThrow('El depósito de este contrato ya fue liquidado previamente.');
 
     const descuentosGuardados = await testApp.dataSource
       .getRepository(DescuentoDeposito)
@@ -483,7 +503,7 @@ describe('RecaudoService (integración) — simularPago == registrarPago', () =>
       diasGraciaEmpresa: 5,
       diasAtrasoDeseado: 0,
     });
-    const novedad = await crearObligacion(testApp.dataSource, contrato, {
+    await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.NOVEDAD,
       valorOriginal: 150000,
       diasGraciaEmpresa: 5,
@@ -561,15 +581,21 @@ describe('RecaudoService (integración) — listar (módulo Recibos)', () => {
     });
 
     await recaudo.registrarPago(
-      { contratoId: contratoA.id, detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 100000 }] } as RegistrarPagoDto,
+      {
+        contratoId: contratoA.id,
+        detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 100000 }],
+      },
       'admin@test.com',
     );
     await recaudo.registrarPago(
-      { contratoId: contratoB.id, detallesPago: [{ medioPago: MedioPago.TRANSFERENCIA, monto: 100000 }] } as RegistrarPagoDto,
+      {
+        contratoId: contratoB.id,
+        detallesPago: [{ medioPago: MedioPago.TRANSFERENCIA, monto: 100000 }],
+      },
       'admin@test.com',
     );
 
-    const todos = await recaudo.listar({} as any);
+    const todos = await recaudo.listar({});
     expect(todos.total).toBe(2);
     // detallesPago se trae por una segunda consulta (no por JOIN 1:N en la query paginada,
     // para no corromper la paginación) — verificar que igual llega poblado por recibo.
@@ -577,11 +603,11 @@ describe('RecaudoService (integración) — listar (módulo Recibos)', () => {
       expect(recibo.detallesPago.length).toBeGreaterThan(0);
     }
 
-    const porCedula = await recaudo.listar({ busqueda: '111222333' } as any);
+    const porCedula = await recaudo.listar({ busqueda: '111222333' });
     expect(porCedula.total).toBe(1);
     expect(porCedula.data[0].contrato.cliente.id).toBe(clienteA.id);
 
-    const porMedio = await recaudo.listar({ medioPago: MedioPago.TRANSFERENCIA } as any);
+    const porMedio = await recaudo.listar({ medioPago: MedioPago.TRANSFERENCIA });
     expect(porMedio.total).toBe(1);
     expect(porMedio.data[0].contrato.cliente.id).toBe(clienteB.id);
   });

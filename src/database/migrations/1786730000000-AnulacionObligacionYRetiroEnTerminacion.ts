@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Dos cambios de esquema derivados de la auditoría de control interno (H7):
@@ -10,16 +10,19 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  *    que siempre devolvía cero resultados. Seguro de retirar porque ninguna fila lo usa.
  */
 export class AnulacionObligacionYRetiroEnTerminacion1786730000000 implements MigrationInterface {
-    name = 'AnulacionObligacionYRetiroEnTerminacion1786730000000'
+  name = 'AnulacionObligacionYRetiroEnTerminacion1786730000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`obligacion\` ADD \`motivoAnulacion\` text NULL`);
-        await queryRunner.query(`ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'SUSPENDIDO', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`obligacion\` ADD \`motivoAnulacion\` text NULL`);
+    await queryRunner.query(
+      `ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'SUSPENDIDO', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'SUSPENDIDO', 'EN_TERMINACION', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`);
-        await queryRunner.query(`ALTER TABLE \`obligacion\` DROP COLUMN \`motivoAnulacion\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'SUSPENDIDO', 'EN_TERMINACION', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`,
+    );
+    await queryRunner.query(`ALTER TABLE \`obligacion\` DROP COLUMN \`motivoAnulacion\``);
+  }
 }

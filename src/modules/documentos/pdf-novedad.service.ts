@@ -21,7 +21,10 @@ export class PdfNovedadService {
     const margenX = 40;
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: tamano, margins: { top: margenX, bottom: margenX, left: margenX, right: margenX } });
+      const doc = new PDFDocument({
+        size: tamano,
+        margins: { top: margenX, bottom: margenX, left: margenX, right: margenX },
+      });
       const chunks: Buffer[] = [];
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -46,12 +49,24 @@ export class PdfNovedadService {
       if (empresa.telefono) doc.text(`Tel: ${empresa.telefono}`);
       doc.moveDown(0.5);
       doc.y = Math.max(doc.y, yTrasLogo);
-      doc.strokeColor('#CFA052').lineWidth(2).moveTo(margenX, doc.y).lineTo(tamano[0] - margenX, doc.y).stroke();
+      doc
+        .strokeColor('#CFA052')
+        .lineWidth(2)
+        .moveTo(margenX, doc.y)
+        .lineTo(tamano[0] - margenX, doc.y)
+        .stroke();
       doc.moveDown(1);
 
       // ---- Título y consecutivo ----
-      doc.fillColor('#1A1A1A').fontSize(14).font('Helvetica-Bold').text('RECIBO DE REPORTE DE NOVEDAD', { align: 'center' });
-      doc.fontSize(11).font('Helvetica').text(`No. ${novedad.consecutivo ?? '—'}`, { align: 'center' });
+      doc
+        .fillColor('#1A1A1A')
+        .fontSize(14)
+        .font('Helvetica-Bold')
+        .text('RECIBO DE REPORTE DE NOVEDAD', { align: 'center' });
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .text(`No. ${novedad.consecutivo ?? '—'}`, { align: 'center' });
       doc.moveDown(0.3);
 
       // ---- Aviso: documento de control interno, sin impacto financiero ----
@@ -81,7 +96,12 @@ export class PdfNovedadService {
 
       fila('Fecha:', this.formatoFechaCO(novedad.fecha));
       fila('Inmueble:', `${novedad.inmueble?.direccion ?? ''} (${novedad.inmueble?.barrio ?? ''})`);
-      fila('Contrato relacionado:', contrato ? `${contrato.consecutivo ?? contrato.id} — ${contrato.cliente?.nombreCompleto ?? '—'}` : 'Sin contrato asociado');
+      fila(
+        'Contrato relacionado:',
+        contrato
+          ? `${contrato.consecutivo ?? contrato.id} — ${contrato.cliente?.nombreCompleto ?? '—'}`
+          : 'Sin contrato asociado',
+      );
       fila('Responsable sugerido:', novedad.responsableSugerido);
       fila('Estado:', novedad.estado);
       fila('Registrado por:', novedad.registradoPorEmail ?? '—');
@@ -98,13 +118,19 @@ export class PdfNovedadService {
       }
 
       doc.moveDown(1.5);
-      doc.fillColor('#4A4D52').fontSize(8).font('Helvetica-Oblique').text('Documento generado por el sistema — no requiere firma manuscrita.', { align: 'center' });
+      doc
+        .fillColor('#4A4D52')
+        .fontSize(8)
+        .font('Helvetica-Oblique')
+        .text('Documento generado por el sistema — no requiere firma manuscrita.', { align: 'center' });
 
       doc.end();
     });
   }
 
   private formatoFechaCO(fecha: Date): string {
-    return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(fecha));
+    return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(
+      new Date(fecha),
+    );
   }
 }

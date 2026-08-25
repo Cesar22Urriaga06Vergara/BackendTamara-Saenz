@@ -97,7 +97,11 @@ export class RecaudoService {
       // 2.2) Calcula el plan de aplicación (a qué obligación/concepto va cada peso, en orden
       // Canon → Novedad → Mora) con el MISMO método puro que usa `simularPago` para la
       // previsualización (sin cálculo espejo en el frontend: un solo lugar define esta regla).
-      const { aplicaciones: plan, excedente } = this.calcularPlanAplicacion(ordenAplicacion, moraPendientePorObligacion, disponible);
+      const { aplicaciones: plan, excedente } = this.calcularPlanAplicacion(
+        ordenAplicacion,
+        moraPendientePorObligacion,
+        disponible,
+      );
 
       // 2.3) Persistir cada abono del plan en su obligación real. Guarda también el desglose
       // (obligación + monto + concepto + saldo posterior) para permitir reverso preciso y para
@@ -236,9 +240,17 @@ export class RecaudoService {
     ordenAplicacion: Obligacion[],
     moraPendientePorObligacion: Map<string, number>,
     disponibleInicial: number,
-  ): { aplicaciones: { obligacionId: string; monto: number; concepto: ConceptoAplicacion; saldoPosterior: number }[]; excedente: number } {
+  ): {
+    aplicaciones: { obligacionId: string; monto: number; concepto: ConceptoAplicacion; saldoPosterior: number }[];
+    excedente: number;
+  } {
     let disponible = disponibleInicial;
-    const aplicaciones: { obligacionId: string; monto: number; concepto: ConceptoAplicacion; saldoPosterior: number }[] = [];
+    const aplicaciones: {
+      obligacionId: string;
+      monto: number;
+      concepto: ConceptoAplicacion;
+      saldoPosterior: number;
+    }[] = [];
 
     // Primero CAPITAL, Canon íntegro antes que Novedad (§10).
     for (const obligacion of ordenAplicacion) {
@@ -312,7 +324,11 @@ export class RecaudoService {
     for (const o of ordenAplicacion) moraPendientePorObligacion.set(o.id, Number(o.valorMoraAcumulada));
 
     const disponibleInicial = valorTotalPago + saldoFavorDisponible;
-    const { aplicaciones, excedente } = this.calcularPlanAplicacion(ordenAplicacion, moraPendientePorObligacion, disponibleInicial);
+    const { aplicaciones, excedente } = this.calcularPlanAplicacion(
+      ordenAplicacion,
+      moraPendientePorObligacion,
+      disponibleInicial,
+    );
     const dejarComoSaldoFavor = dto.dejarExcedenteComoSaldoFavor === true;
 
     return {
@@ -368,9 +384,12 @@ export class RecaudoService {
       .orderBy('r.creadoEn', 'DESC');
 
     if (filtro.busqueda) {
-      qb.andWhere('(cliente.numeroDocumento LIKE :busqueda OR cliente.nombreCompleto LIKE :busqueda OR r.consecutivo LIKE :busqueda)', {
-        busqueda: `%${filtro.busqueda}%`,
-      });
+      qb.andWhere(
+        '(cliente.numeroDocumento LIKE :busqueda OR cliente.nombreCompleto LIKE :busqueda OR r.consecutivo LIKE :busqueda)',
+        {
+          busqueda: `%${filtro.busqueda}%`,
+        },
+      );
     }
     if (filtro.estado) qb.andWhere('r.estado = :estado', { estado: filtro.estado });
     if (filtro.fechaDesde) qb.andWhere('r.creadoEn >= :desde', { desde: filtro.fechaDesde });
@@ -438,9 +457,17 @@ export class RecaudoService {
       const aplicaciones = await aplicacionRepo.find({ where: { recibo: { id } }, relations: ['obligacion'] });
       for (const aplicacion of aplicaciones) {
         if (aplicacion.concepto === ConceptoAplicacion.MORA) {
-          await this.obligacionesService.revertirAbonoMora(aplicacion.obligacion.id, Number(aplicacion.montoAplicado), manager);
+          await this.obligacionesService.revertirAbonoMora(
+            aplicacion.obligacion.id,
+            Number(aplicacion.montoAplicado),
+            manager,
+          );
         } else {
-          await this.obligacionesService.revertirAbono(aplicacion.obligacion.id, Number(aplicacion.montoAplicado), manager);
+          await this.obligacionesService.revertirAbono(
+            aplicacion.obligacion.id,
+            Number(aplicacion.montoAplicado),
+            manager,
+          );
         }
       }
 
@@ -507,6 +534,9 @@ export class RecaudoService {
       if (contrato.estado !== EstadoContrato.TERMINADO) {
         throw new BadRequestException('Solo se puede liquidar el depósito de un contrato terminado.');
       }
+      if (contrato.depositoLiquidadoEn) {
+        throw new BadRequestException('El depósito de este contrato ya fue liquidado previamente.');
+      }
 
       const descuentos = dto.descuentos ?? [];
       const valorDescuentos = descuentos.reduce((acc, d) => acc + d.valor, 0);
@@ -538,6 +568,7 @@ export class RecaudoService {
       }
 
       contrato.depositoCustodia = 0;
+      contrato.depositoLiquidadoEn = new Date();
       await manager.save(contrato);
 
       return { contratoId, valorDevuelto: valorDevolucion, valorDescontado: valorDescuentos, descuentos };

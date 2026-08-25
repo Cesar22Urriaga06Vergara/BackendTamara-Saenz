@@ -51,6 +51,7 @@ const TABLAS_EN_ORDEN_DE_LIMPIEZA = [
   'consecutivo',
   'historial_tasa_mora',
   'empresa',
+  'registro_auditoria',
 ];
 
 export async function limpiarBaseDeDatos(dataSource: DataSource): Promise<void> {

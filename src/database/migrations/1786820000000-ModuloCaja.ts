@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo CAJA-02 de la auditoría: no existía ningún mecanismo de arqueo de caja (saldo
@@ -9,12 +9,12 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * separado para que el arqueo sea auditable después.
  */
 export class ModuloCaja1786820000000 implements MigrationInterface {
-    name = 'ModuloCaja1786820000000'
+  name = 'ModuloCaja1786820000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`empresa\` ADD \`saldoInicialCaja\` decimal(12,2) NOT NULL DEFAULT '0.00'`);
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`empresa\` ADD \`saldoInicialCaja\` decimal(12,2) NOT NULL DEFAULT '0.00'`);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             CREATE TABLE \`arqueo_caja\` (
                 \`id\` varchar(36) NOT NULL,
                 \`saldoInicial\` decimal(12,2) NOT NULL,
@@ -30,11 +30,10 @@ export class ModuloCaja1786820000000 implements MigrationInterface {
                 PRIMARY KEY (\`id\`)
             ) ENGINE=InnoDB
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE \`arqueo_caja\``);
-        await queryRunner.query(`ALTER TABLE \`empresa\` DROP COLUMN \`saldoInicialCaja\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE \`arqueo_caja\``);
+    await queryRunner.query(`ALTER TABLE \`empresa\` DROP COLUMN \`saldoInicialCaja\``);
+  }
 }

@@ -15,7 +15,15 @@ import { MovimientosModule } from '../movimientos/movimientos.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ReciboCaja, DetallePago, AplicacionPago, SaldoFavorCredito, DescuentoDeposito, Contrato, Obligacion]),
+    TypeOrmModule.forFeature([
+      ReciboCaja,
+      DetallePago,
+      AplicacionPago,
+      SaldoFavorCredito,
+      DescuentoDeposito,
+      Contrato,
+      Obligacion,
+    ]),
     ObligacionesModule,
     EmpresaModule,
     MovimientosModule,

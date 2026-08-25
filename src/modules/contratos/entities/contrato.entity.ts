@@ -68,6 +68,17 @@ export class Contrato {
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   depositoCustodia: number;
 
+  /**
+   * Marca cuándo se liquidó el depósito en custodia de este contrato (NULL mientras no se
+   * haya liquidado). `RecaudoService.liquidarDeposito` la usa como guardia de idempotencia:
+   * antes, una segunda llamada sobre el mismo contrato ya terminado no duplicaba el pago
+   * (`depositoCustodia` queda en 0 tras la primera liquidación, así que `valorDevolucion`
+   * calcula 0 en la segunda), pero sí insertaba filas `DescuentoDeposito` duplicadas con
+   * efecto cero si se reenviaban descuentos, contaminando ese rastro de auditoría.
+   */
+  @Column({ type: 'datetime', nullable: true })
+  depositoLiquidadoEn: Date | null;
+
   @Column({ type: 'enum', enum: EstadoContrato, default: EstadoContrato.ACTIVO })
   @Index()
   estado: EstadoContrato;

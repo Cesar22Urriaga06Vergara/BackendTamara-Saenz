@@ -1,4 +1,16 @@
-import { ArrayMinSize, IsArray, IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { MedioPago } from '../entities/detalle-pago.entity';
 
@@ -12,11 +24,14 @@ class DetallePagoInput {
 export class RegistrarPagoDto {
   @IsUUID() contratoId: string;
 
-  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => DetallePagoInput)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => DetallePagoInput)
   detallesPago: DetallePagoInput[];
 
   /** Formato de impresión del recibo. */
-  @IsOptional() @IsString() formato?: 'CARTA' | 'MEDIA_CARTA';
+  @IsOptional() @IsIn(['CARTA', 'MEDIA_CARTA']) formato?: 'CARTA' | 'MEDIA_CARTA';
 
   /**
    * Decisión explícita del cliente (RDN-01): por defecto (`false`/ausente), cualquier

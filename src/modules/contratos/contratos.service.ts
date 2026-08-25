@@ -164,6 +164,10 @@ export class ContratosService {
       contrato.inmueble.estado = EstadoInmueble.DISPONIBLE;
       await manager.save(contrato.inmueble);
 
+      // RDN-04 / CONT-05: anula el canon generado por adelantado para periodos posteriores
+      // a esta terminación (ver detalle en ObligacionesService.anularCanonPosteriorATerminacion).
+      await this.obligacionesService.anularCanonPosteriorATerminacion(contrato.id, contrato.fechaFin, manager);
+
       await manager.save(
         manager.create(ContratoHistorialEstado, {
           contrato,

@@ -38,7 +38,7 @@ export class ConsecutivoService {
 
       if (!consecutivo) {
         consecutivo = repo.create({ tipo, prefijo: prefijoPorDefecto, ultimoNumero: 0 });
-        consecutivo = await repo.save(consecutivo);
+        await repo.save(consecutivo);
         // Se vuelve a bloquear tras insertar para asegurar consistencia si hubo carrera de creación.
         consecutivo = await repo
           .createQueryBuilder('c')

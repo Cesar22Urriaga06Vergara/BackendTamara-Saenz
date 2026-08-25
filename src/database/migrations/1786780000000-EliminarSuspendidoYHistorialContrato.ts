@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgos CONT-01/CONT-02 de la auditoría: el estado SUSPENDIDO de Contrato contradecía
@@ -21,13 +21,15 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  *    existente que ya tenga `motivoTerminacion`, para que el historial no arranque vacío.
  */
 export class EliminarSuspendidoYHistorialContrato1786780000000 implements MigrationInterface {
-    name = 'EliminarSuspendidoYHistorialContrato1786780000000'
+  name = 'EliminarSuspendidoYHistorialContrato1786780000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`UPDATE \`contrato\` SET \`estado\` = 'ACTIVO' WHERE \`estado\` = 'SUSPENDIDO'`);
-        await queryRunner.query(`ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`);
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`UPDATE \`contrato\` SET \`estado\` = 'ACTIVO' WHERE \`estado\` = 'SUSPENDIDO'`);
+    await queryRunner.query(
+      `ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`,
+    );
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             CREATE TABLE \`contrato_historial_estado\` (
                 \`id\` varchar(36) NOT NULL,
                 \`estadoAnterior\` enum ('ACTIVO', 'TERMINADO') NOT NULL,
@@ -41,24 +43,27 @@ export class EliminarSuspendidoYHistorialContrato1786780000000 implements Migrat
                 PRIMARY KEY (\`id\`)
             ) ENGINE=InnoDB
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE \`contrato_historial_estado\`
             ADD CONSTRAINT \`FK_contrato_historial_estado_contrato\`
             FOREIGN KEY (\`contratoId\`) REFERENCES \`contrato\`(\`id\`) ON DELETE CASCADE ON UPDATE NO ACTION
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             INSERT INTO \`contrato_historial_estado\` (\`id\`, \`contratoId\`, \`estadoAnterior\`, \`estadoNuevo\`, \`motivo\`, \`usuarioEmail\`, \`creadoEn\`)
             SELECT UUID(), \`id\`, 'ACTIVO', 'TERMINADO', \`motivoTerminacion\`, 'sistema@migracion', COALESCE(\`fechaFin\`, \`actualizadoEn\`)
             FROM \`contrato\`
             WHERE \`estado\` = 'TERMINADO' AND \`motivoTerminacion\` IS NOT NULL
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`contrato_historial_estado\` DROP FOREIGN KEY \`FK_contrato_historial_estado_contrato\``);
-        await queryRunner.query(`DROP TABLE \`contrato_historial_estado\``);
-        await queryRunner.query(`ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'SUSPENDIDO', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE \`contrato_historial_estado\` DROP FOREIGN KEY \`FK_contrato_historial_estado_contrato\``,
+    );
+    await queryRunner.query(`DROP TABLE \`contrato_historial_estado\``);
+    await queryRunner.query(
+      `ALTER TABLE \`contrato\` MODIFY \`estado\` enum ('ACTIVO', 'SUSPENDIDO', 'TERMINADO') NOT NULL DEFAULT 'ACTIVO'`,
+    );
+  }
 }

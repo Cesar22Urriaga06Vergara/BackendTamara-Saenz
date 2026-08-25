@@ -74,7 +74,7 @@ export class CajaService {
     return this.repo.save(arqueo);
   }
 
-  async listar(page?: string, limit?: string): Promise<ResultadoPaginado<ArqueoCaja>> {
+  async listar(page?: string | number, limit?: string | number): Promise<ResultadoPaginado<ArqueoCaja>> {
     const qb = this.repo.createQueryBuilder('a').orderBy('a.creadoEn', 'DESC');
     return paginar(qb, page, limit);
   }

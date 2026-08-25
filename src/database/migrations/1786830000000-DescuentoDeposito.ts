@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Hallazgo DEP-01 de la auditoría: `LiquidarDepositoDto.valorDescuentos` era un único número
@@ -7,10 +7,10 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * separado, ligado al contrato liquidado.
  */
 export class DescuentoDeposito1786830000000 implements MigrationInterface {
-    name = 'DescuentoDeposito1786830000000'
+  name = 'DescuentoDeposito1786830000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE \`descuento_deposito\` (
                 \`id\` varchar(36) NOT NULL,
                 \`concepto\` varchar(200) NOT NULL,
@@ -21,18 +21,19 @@ export class DescuentoDeposito1786830000000 implements MigrationInterface {
                 PRIMARY KEY (\`id\`)
             ) ENGINE=InnoDB
         `);
-        await queryRunner.query(`CREATE INDEX \`IDX_descuento_deposito_contratoId\` ON \`descuento_deposito\` (\`contratoId\`)`);
-        await queryRunner.query(`
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_descuento_deposito_contratoId\` ON \`descuento_deposito\` (\`contratoId\`)`,
+    );
+    await queryRunner.query(`
             ALTER TABLE \`descuento_deposito\`
             ADD CONSTRAINT \`FK_descuento_deposito_contrato\`
             FOREIGN KEY (\`contratoId\`) REFERENCES \`contrato\`(\`id\`) ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE \`descuento_deposito\` DROP FOREIGN KEY \`FK_descuento_deposito_contrato\``);
-        await queryRunner.query(`DROP INDEX \`IDX_descuento_deposito_contratoId\` ON \`descuento_deposito\``);
-        await queryRunner.query(`DROP TABLE \`descuento_deposito\``);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE \`descuento_deposito\` DROP FOREIGN KEY \`FK_descuento_deposito_contrato\``);
+    await queryRunner.query(`DROP INDEX \`IDX_descuento_deposito_contratoId\` ON \`descuento_deposito\``);
+    await queryRunner.query(`DROP TABLE \`descuento_deposito\``);
+  }
 }
