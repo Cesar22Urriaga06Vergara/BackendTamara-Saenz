@@ -612,3 +612,73 @@ describe('RecaudoService (integración) — listar (módulo Recibos)', () => {
     expect(porMedio.data[0].contrato.cliente.id).toBe(clienteB.id);
   });
 });
+
+/**
+ * Valida los endpoints de solo lectura que sostienen la pantalla Depósitos del frontend
+ * (Track B5): contratos terminados con depósito aún sin liquidar, y el historial de
+ * liquidaciones con su desglose de descuentos.
+ */
+describe('RecaudoService (integración) — depositosPendientes/depositosLiquidados', () => {
+  let testApp: TestApp;
+  let recaudo: RecaudoService;
+
+  beforeAll(async () => {
+    testApp = await bootstrapTestApp();
+    recaudo = testApp.app.get(RecaudoService);
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(async () => {
+    await limpiarBaseDeDatos(testApp.dataSource);
+  });
+
+  async function crearContratoTerminadoConDeposito(depositoCustodia: number) {
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    return crearContrato(testApp.dataSource, cliente, inmueble, {
+      estado: EstadoContrato.TERMINADO,
+      fechaFin: new Date(),
+      depositoCustodia,
+    });
+  }
+
+  it('depositosPendientes solo incluye TERMINADO con depósito > 0 y sin liquidar', async () => {
+    const pendiente = await crearContratoTerminadoConDeposito(500000);
+    const yaLiquidado = await crearContratoTerminadoConDeposito(300000);
+    await recaudo.liquidarDeposito(yaLiquidado.id, { medioPago: MedioPago.EFECTIVO }, 'admin@test.com');
+
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    // ACTIVO con depósito: no está pendiente de liquidar todavía (no aplica hasta terminar).
+    await crearContrato(testApp.dataSource, cliente, inmueble, { depositoCustodia: 400000 });
+
+    const resultado = await recaudo.depositosPendientes();
+    expect(resultado.total).toBe(1);
+    expect(resultado.data[0].id).toBe(pendiente.id);
+  });
+
+  it('depositosLiquidados trae el desglose de descuentos agrupado por contrato', async () => {
+    const contratoA = await crearContratoTerminadoConDeposito(1000000);
+    const contratoB = await crearContratoTerminadoConDeposito(500000);
+
+    await recaudo.liquidarDeposito(
+      contratoA.id,
+      { descuentos: [{ concepto: 'Aseo', valor: 100000 }], medioPago: MedioPago.EFECTIVO },
+      'admin@test.com',
+    );
+    await recaudo.liquidarDeposito(contratoB.id, { medioPago: MedioPago.TRANSFERENCIA }, 'admin@test.com');
+
+    const resultado = await recaudo.depositosLiquidados();
+    expect(resultado.total).toBe(2);
+
+    const filaA = resultado.data.find((c) => c.id === contratoA.id)!;
+    expect(filaA.descuentos).toHaveLength(1);
+    expect(filaA.descuentos[0].concepto).toBe('Aseo');
+
+    const filaB = resultado.data.find((c) => c.id === contratoB.id)!;
+    expect(filaB.descuentos).toHaveLength(0);
+  });
+});

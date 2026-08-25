@@ -6,6 +6,7 @@ import { Contrato, EstadoContrato } from '../contratos/entities/contrato.entity'
 import { Empresa } from '../empresa/entities/empresa.entity';
 import { HistorialTasaMora } from '../empresa/entities/historial-tasa-mora.entity';
 import { CrearObligacionNovedadDto } from './dto/crear-obligacion-novedad.dto';
+import { paginar, ResultadoPaginado } from '../../common/utils/paginar.util';
 
 @Injectable()
 export class ObligacionesService {
@@ -138,6 +139,17 @@ export class ObligacionesService {
     return obligaciones.map((o) => ({ ...o, valorMoraAcumulada: this.moraPendiente(o, historial) }));
   }
 
+  private queryTodasPendientes() {
+    return this.repo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.contrato', 'contrato')
+      .leftJoinAndSelect('contrato.cliente', 'cliente')
+      .leftJoinAndSelect('contrato.inmueble', 'inmueble')
+      .where(this.condicionSaldoPendiente())
+      .setParameters(this.parametrosCondicionSaldoPendiente())
+      .orderBy('o.fechaVencimiento', 'ASC');
+  }
+
   /**
    * Todas las obligaciones con saldo por cobrar del sistema (capital pendiente/parcial, o
    * capital PAGADA con mora aún sin cobrar), con mora pendiente recalculada. Base del reporte
@@ -145,18 +157,24 @@ export class ObligacionesService {
    */
   async todasPendientes(): Promise<Obligacion[]> {
     const historial = await this.obtenerHistorialTasas();
-
-    const obligaciones = await this.repo
-      .createQueryBuilder('o')
-      .leftJoinAndSelect('o.contrato', 'contrato')
-      .leftJoinAndSelect('contrato.cliente', 'cliente')
-      .leftJoinAndSelect('contrato.inmueble', 'inmueble')
-      .where(this.condicionSaldoPendiente())
-      .setParameters(this.parametrosCondicionSaldoPendiente())
-      .orderBy('o.fechaVencimiento', 'ASC')
-      .getMany();
-
+    const obligaciones = await this.queryTodasPendientes().getMany();
     return obligaciones.map((o) => ({ ...o, valorMoraAcumulada: this.moraPendiente(o, historial) }));
+  }
+
+  /**
+   * Misma cartera consolidada que `todasPendientes()`, paginada — para la pantalla interactiva
+   * de Cartera (a diferencia del reporte Excel, que necesita el listado completo de una vez).
+   */
+  async todasPendientesPaginadas(
+    page?: string | number,
+    limit?: string | number,
+  ): Promise<ResultadoPaginado<Obligacion>> {
+    const historial = await this.obtenerHistorialTasas();
+    const resultado = await paginar(this.queryTodasPendientes(), page, limit);
+    return {
+      ...resultado,
+      data: resultado.data.map((o) => ({ ...o, valorMoraAcumulada: this.moraPendiente(o, historial) })),
+    };
   }
 
   /**

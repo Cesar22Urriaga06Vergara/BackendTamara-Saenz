@@ -31,6 +31,8 @@ export class RecaudoService {
     @InjectRepository(ReciboCaja) private readonly reciboRepo: Repository<ReciboCaja>,
     @InjectRepository(AplicacionPago) private readonly aplicacionRepo: Repository<AplicacionPago>,
     @InjectRepository(DetallePago) private readonly detallePagoRepo: Repository<DetallePago>,
+    @InjectRepository(Contrato) private readonly contratoRepo: Repository<Contrato>,
+    @InjectRepository(DescuentoDeposito) private readonly descuentoDepositoRepo: Repository<DescuentoDeposito>,
     private readonly dataSource: DataSource,
     private readonly obligacionesService: ObligacionesService,
     private readonly consecutivoService: ConsecutivoService,
@@ -573,5 +575,51 @@ export class RecaudoService {
 
       return { contratoId, valorDevuelto: valorDevolucion, valorDescontado: valorDescuentos, descuentos };
     });
+  }
+
+  /** Contratos TERMINADOS con depósito en custodia aún sin liquidar — pantalla Depósitos. */
+  async depositosPendientes(page?: string | number, limit?: string | number) {
+    const qb = this.contratoRepo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.cliente', 'cliente')
+      .leftJoinAndSelect('c.inmueble', 'inmueble')
+      .where('c.estado = :estado', { estado: EstadoContrato.TERMINADO })
+      .andWhere('c.depositoLiquidadoEn IS NULL')
+      .andWhere('c.depositoCustodia > 0')
+      .orderBy('c.fechaFin', 'ASC');
+    return paginar(qb, page, limit);
+  }
+
+  /**
+   * Contratos con depósito ya liquidado, con el desglose de descuentos de cada uno (§19,
+   * DEP-01) — `DescuentoDeposito` no tiene relación inversa declarada en `Contrato` (unidirec-
+   * cional a propósito, ver la entidad), así que el desglose se trae aparte y se agrupa aquí.
+   */
+  async depositosLiquidados(page?: string | number, limit?: string | number) {
+    const qb = this.contratoRepo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.cliente', 'cliente')
+      .leftJoinAndSelect('c.inmueble', 'inmueble')
+      .where('c.depositoLiquidadoEn IS NOT NULL')
+      .orderBy('c.depositoLiquidadoEn', 'DESC');
+    const resultado = await paginar(qb, page, limit);
+
+    const contratoIds = resultado.data.map((c) => c.id);
+    const descuentos = contratoIds.length
+      ? await this.descuentoDepositoRepo
+          .createQueryBuilder('d')
+          .leftJoin('d.contrato', 'contrato')
+          .addSelect('contrato.id')
+          .where('contrato.id IN (:...contratoIds)', { contratoIds })
+          .getMany()
+      : [];
+
+    return {
+      ...resultado,
+      data: resultado.data.map((contrato) => ({
+        ...contrato,
+        descuentos: descuentos.filter((d) => d.contrato.id === contrato.id),
+      })),
+    };
   }
 }

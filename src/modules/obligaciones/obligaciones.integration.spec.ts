@@ -81,3 +81,53 @@ describe('ObligacionesService (integración) — MORA-01', () => {
     expect(Number(pendientes.find((o) => o.id === obligacion.id)!.valorMoraAcumulada)).toBe(0);
   });
 });
+
+/** Valida el endpoint de Cartera consolidada (Track B5, pantalla Cartera del frontend). */
+describe('ObligacionesService (integración) — todasPendientesPaginadas', () => {
+  let testApp: TestApp;
+  let service: ObligacionesService;
+
+  beforeAll(async () => {
+    testApp = await bootstrapTestApp();
+    service = testApp.app.get(ObligacionesService);
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(async () => {
+    await limpiarBaseDeDatos(testApp.dataSource);
+  });
+
+  it('trae obligaciones pendientes de distintos contratos, paginado', async () => {
+    await configurarEmpresa(testApp.dataSource, { diasGraciaMora: 5, porcentajeMoraMensual: 1.5 });
+    const clienteA = await crearCliente(testApp.dataSource);
+    const inmuebleA = await crearInmueble(testApp.dataSource);
+    const contratoA = await crearContrato(testApp.dataSource, clienteA, inmuebleA, { canonValor: 500000 });
+    await crearObligacion(testApp.dataSource, contratoA, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 500000,
+      diasGraciaEmpresa: 5,
+      diasAtrasoDeseado: 0,
+    });
+
+    const clienteB = await crearCliente(testApp.dataSource);
+    const inmuebleB = await crearInmueble(testApp.dataSource);
+    const contratoB = await crearContrato(testApp.dataSource, clienteB, inmuebleB, { canonValor: 300000 });
+    await crearObligacion(testApp.dataSource, contratoB, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 300000,
+      diasGraciaEmpresa: 5,
+      diasAtrasoDeseado: 0,
+    });
+
+    const completo = await service.todasPendientesPaginadas();
+    expect(completo.total).toBe(2);
+    expect(completo.data.map((o) => o.contrato.id).sort()).toEqual([contratoA.id, contratoB.id].sort());
+
+    const paginado = await service.todasPendientesPaginadas(1, 1);
+    expect(paginado.data).toHaveLength(1);
+    expect(paginado.totalPages).toBe(2);
+  });
+});

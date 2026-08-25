@@ -9,6 +9,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PaginacionDto } from '../../common/dto/paginacion.dto';
 
 /**
  * Motor Financiero de Recaudo — EXCLUSIVO Administrador en TODO el controlador.
@@ -60,6 +61,18 @@ export class RecaudoController {
   @AuditAction({ modulo: 'RECAUDO', accion: 'ANULAR_RECIBO' })
   anular(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AnularReciboDto, @CurrentUser() user: any) {
     return this.service.anular(id, dto, user.email);
+  }
+
+  /** Pantalla Depósitos: contratos terminados con depósito aún sin liquidar. */
+  @Get('depositos/pendientes')
+  depositosPendientes(@Query() { page, limit }: PaginacionDto) {
+    return this.service.depositosPendientes(page, limit);
+  }
+
+  /** Pantalla Depósitos: historial de liquidaciones con su desglose de descuentos. */
+  @Get('depositos/liquidados')
+  depositosLiquidados(@Query() { page, limit }: PaginacionDto) {
+    return this.service.depositosLiquidados(page, limit);
   }
 
   @Post('contrato/:contratoId/liquidar-deposito')

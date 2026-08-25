@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ObligacionesService } from './obligaciones.service';
 import { AnularObligacionDto } from './dto/anular-obligacion.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
+import { PaginacionDto } from '../../common/dto/paginacion.dto';
 
 /** Motor financiero — EXCLUSIVO Administrador. */
 @ApiTags('Financiero / Obligaciones')
@@ -19,6 +20,12 @@ export class ObligacionesController {
   @AuditAction({ modulo: 'OBLIGACIONES', accion: 'GENERAR_CANONES_MENSUALES' })
   generarCanones() {
     return this.service.generarCanonesMensuales();
+  }
+
+  /** Cartera consolidada: toda obligación con saldo por cobrar, de cualquier contrato. */
+  @Get()
+  todasPendientes(@Query() { page, limit }: PaginacionDto) {
+    return this.service.todasPendientesPaginadas(page, limit);
   }
 
   @Get('contrato/:contratoId/pendientes')
