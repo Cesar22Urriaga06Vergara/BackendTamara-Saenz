@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null http://localhost:3000/api/v1/docs)",
+      "Bash(curl -s -o /dev/null http://localhost:3001)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npx nuxi *)",
+      "Bash(timeout 45 npx nuxt build --dotenv .env)"
+    ]
+  }
+}

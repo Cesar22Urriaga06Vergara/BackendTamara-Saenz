@@ -1,0 +1,39 @@
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+
+/**
+ * Directorio de Clientes (arrendatarios). Independiente de Codeudores.
+ * La búsqueda principal en Contratación se hace por número de documento.
+ */
+@Entity('cliente')
+export class Cliente {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Index({ unique: true })
+  @Column({ length: 30 })
+  numeroDocumento: string;
+
+  @Column({ length: 20, default: 'CC' })
+  tipoDocumento: string; // CC, CE, NIT, PAS
+
+  @Column({ length: 150 })
+  nombreCompleto: string;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  email: string | null;
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  telefono: string | null;
+
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  direccion: string | null;
+
+  @Column({ default: true })
+  activo: boolean;
+
+  @CreateDateColumn()
+  creadoEn: Date;
+
+  @UpdateDateColumn()
+  actualizadoEn: Date;
+}
