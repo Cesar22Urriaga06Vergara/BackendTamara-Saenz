@@ -3,6 +3,7 @@ import { Contrato, EstadoContrato } from './entities/contrato.entity';
 import { InmueblesService } from '../inmuebles/inmuebles.service';
 import { Inmueble, EstadoInmueble } from '../inmuebles/entities/inmueble.entity';
 import { Obligacion, EstadoObligacion, TipoObligacion } from '../obligaciones/entities/obligacion.entity';
+import { ObligacionesService } from '../obligaciones/obligaciones.service';
 import { Movimiento, OrigenMovimiento, TipoMovimiento } from '../movimientos/entities/movimiento.entity';
 import { MedioPago } from '../../common/enums/medio-pago.enum';
 import { Rol } from '../../common/enums/roles.enum';
@@ -98,6 +99,40 @@ describe('ContratosService (integración) — CONT-01/CONT-02', () => {
     expect(historial[0].estadoNuevo).toBe(EstadoContrato.ACTIVO);
     expect(historial[0].motivo).toBe('El cliente decidió continuar');
     expect(historial[0].usuarioEmail).toBe('admin@test.com');
+  });
+
+  it('REACT-01: reactivar un contrato TERMINADO sin cánones genera sus obligaciones en la misma operación', async () => {
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource, {
+      estado: EstadoInmueble.DISPONIBLE,
+      canonValor: 500000,
+    });
+    const hoy = new Date();
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, {
+      estado: EstadoContrato.TERMINADO,
+      // Mes 1 del día ⇒ sin overflow de `setMonth`: contrato que arrancó hace 2 meses.
+      fechaInicio: new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1),
+      fechaFin: new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1),
+      motivoTerminacion: 'Terminación previa',
+    });
+
+    const canonRepo = testApp.dataSource.getRepository(Obligacion);
+    // Precondición: el contrato no tiene cánones (el bug era que reactivar no los generaba,
+    // dejándolo sin obligación pendiente hasta la corrida del CRON).
+    expect(await canonRepo.count({ where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON } })).toBe(0);
+
+    await service.reactivar(contrato.id, dtoReactivar('El cliente decidió continuar'), 'admin@test.com');
+
+    const canones = await canonRepo.find({
+      where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON },
+    });
+    // 2 meses previos + mes en curso + 2 de anticipación (horizonte default 3) = 5.
+    expect(canones.length).toBe(5);
+    expect(canones.every((c) => c.estado === EstadoObligacion.PENDIENTE)).toBe(true);
+
+    // Idempotente: volver a generar (misma clave única de canon) no duplica nada.
+    await testApp.app.get(ObligacionesService).generarCanonesParaContrato(contrato.id);
+    expect(await canonRepo.count({ where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON } })).toBe(5);
   });
 
   it('CONT-02: rechaza reactivar si el inmueble ya está ocupado por otro contrato activo', async () => {

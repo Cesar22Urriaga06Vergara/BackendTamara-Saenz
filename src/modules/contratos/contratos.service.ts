@@ -272,6 +272,12 @@ export class ContratosService {
         }),
       );
 
+      // Regenerar el canon del periodo vigente de una vez, igual que `crear()` (REACT-01):
+      // sin esto el contrato reactivado quedaba sin obligación pendiente hasta la corrida del
+      // CRON diario. Idempotente vía el índice único de canon; corre dentro de esta misma
+      // transacción (que ya tiene el contrato bloqueado, por eso no vuelve a bloquearlo).
+      await this.obligacionesService.generarCanonesParaContrato(contrato.id, { manager });
+
       return contrato;
     });
   }
