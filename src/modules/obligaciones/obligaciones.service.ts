@@ -4,9 +4,15 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { EstadoObligacion, Obligacion, TipoObligacion } from './entities/obligacion.entity';
 import { Contrato, EstadoContrato } from '../contratos/entities/contrato.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
-import { HistorialTasaMora } from '../empresa/entities/historial-tasa-mora.entity';
 import { CrearObligacionNovedadDto } from './dto/crear-obligacion-novedad.dto';
 import { paginar, ResultadoPaginado } from '../../common/utils/paginar.util';
+import { redondearMoneda, esCeroMoneda } from '../../common/utils/dinero.util';
+
+/**
+ * Obligación con el flag `vencida` (fecha de vencimiento en el pasado) — lo que consume la
+ * ficha de recaudo.
+ */
+export type ObligacionConVencida = Obligacion & { vencida: boolean };
 
 @Injectable()
 export class ObligacionesService {
@@ -14,84 +20,120 @@ export class ObligacionesService {
     @InjectRepository(Obligacion) private readonly repo: Repository<Obligacion>,
     @InjectRepository(Contrato) private readonly contratoRepo: Repository<Contrato>,
     @InjectRepository(Empresa) private readonly empresaRepo: Repository<Empresa>,
-    @InjectRepository(HistorialTasaMora) private readonly historialTasaRepo: Repository<HistorialTasaMora>,
     private readonly dataSource: DataSource,
   ) {}
 
   /**
-   * Generación mensual automática de obligaciones tipo CANON.
-   * Se ejecuta para cada contrato ACTIVO, respetando `horizonteMesesCanon` (parámetro
-   * global de Empresa): evita generar canon duplicado si ya existe para ese periodo.
+   * Generación automática de obligaciones tipo CANON para todos los contratos ACTIVOS.
+   * Para cada contrato genera el canon de CADA mes desde `contrato.fechaInicio` hasta el mes
+   * en curso más `horizonteMesesCanon` (parámetro global de Empresa) de anticipación —
+   * incluye el back-fill de meses vencidos que nunca se generaron (cron caído, migración de
+   * datos, contrato creado antes de esta corrección). Evita duplicados por periodo.
    * Diseñado para ser invocado por un CRON (ScheduleModule) o manualmente por el Admin.
    */
   async generarCanonesMensuales(): Promise<{ generadas: number }> {
-    const empresa = await this.empresaRepo.find({ take: 1 });
-    const horizonte = empresa[0]?.horizonteMesesCanon ?? 3;
+    const horizonte = await this.horizonteCanon();
     const contratosActivos = await this.contratoRepo.find({ where: { estado: EstadoContrato.ACTIVO } });
 
     let generadas = 0;
     for (const contrato of contratosActivos) {
-      generadas += await this.generarCanonesDeContrato(contrato.id, horizonte);
+      generadas += await this.generarCanonesParaContrato(contrato.id, { horizonteFuturo: horizonte });
     }
     return { generadas };
   }
 
   /**
-   * Genera los canones pendientes de UN contrato dentro de su propia transacción, con
+   * Genera los canones faltantes de UN contrato. Sin `manager`, abre su propia transacción con
    * bloqueo pesimista sobre el contrato: serializa dos generaciones concurrentes del mismo
-   * contrato (ej. el cron nocturno solapándose con un disparo manual del Administrador, o dos
-   * corridas del cron) para que ninguna pase el chequeo "ya existe" al mismo tiempo y termine
-   * duplicando canon — hallazgo CONC-01 de la auditoría. El índice único
-   * `(contratoId, tipo, periodo)` sobre `obligacion` (ver migración) es la garantía
-   * estructural final, incluso si algún código futuro llegara a saltarse este lock. Cada
-   * contrato en su propia transacción, en vez de una transacción para todo el lote, para que
-   * un problema puntual en un contrato no revierta lo ya generado para los demás.
+   * contrato (cron nocturno solapado con un disparo manual, o dos corridas del cron) para que
+   * ninguna pase el chequeo "ya existe" al mismo tiempo y duplique canon — hallazgo CONC-01. El
+   * índice único `(contratoId, tipo, periodo)` sobre `obligacion` es la garantía estructural
+   * final. Con `manager` (ej. `ContratosService.crear`), se ejecuta dentro de la transacción del
+   * llamador, que ya tiene el contrato aislado (recién creado o bloqueado).
    */
-  private async generarCanonesDeContrato(contratoId: string, horizonte: number): Promise<number> {
-    return this.dataSource.transaction(async (manager) => {
-      const contrato = await manager
-        .createQueryBuilder(Contrato, 'c')
-        .setLock('pessimistic_write')
-        .where('c.id = :id', { id: contratoId })
-        .getOne();
-      // Pudo haber sido terminado/eliminado entre el listado inicial y la obtención del lock.
-      if (!contrato || contrato.estado !== EstadoContrato.ACTIVO) return 0;
+  async generarCanonesParaContrato(
+    contratoId: string,
+    opciones: { manager?: EntityManager; horizonteFuturo?: number } = {},
+  ): Promise<number> {
+    if (opciones.manager) {
+      return this.generarCanonesEnManager(contratoId, opciones.manager, opciones.horizonteFuturo, false);
+    }
+    return this.dataSource.transaction((manager) =>
+      this.generarCanonesEnManager(contratoId, manager, opciones.horizonteFuturo, true),
+    );
+  }
 
-      const repo = manager.getRepository(Obligacion);
-      let generadas = 0;
+  private async generarCanonesEnManager(
+    contratoId: string,
+    manager: EntityManager,
+    horizonteFuturo: number | undefined,
+    bloquearContrato: boolean,
+  ): Promise<number> {
+    const contrato = bloquearContrato
+      ? await manager
+          .createQueryBuilder(Contrato, 'c')
+          .setLock('pessimistic_write')
+          .where('c.id = :id', { id: contratoId })
+          .getOne()
+      : await manager.findOne(Contrato, { where: { id: contratoId } });
+    // Pudo haber sido terminado/eliminado entre el listado inicial y la obtención del lock.
+    if (!contrato || contrato.estado !== EstadoContrato.ACTIVO) return 0;
 
-      for (let i = 0; i < horizonte; i++) {
-        const periodo = this.primerDiaMes(this.sumarMeses(new Date(), i));
-        const yaExiste = await repo.findOne({
-          where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON, periodo },
-        });
-        if (yaExiste) continue;
+    const horizonte = horizonteFuturo ?? (await this.horizonteCanon(manager));
+    const repo = manager.getRepository(Obligacion);
 
-        // `contrato.diaPago` puede ser 29-31; si el mes del periodo tiene menos días,
-        // se usa el último día real del mes en vez de dejar que `Date` haga overflow
-        // al mes siguiente (ej: diaPago=31 en febrero no debe vencer el 2-3 de marzo).
-        const ultimoDiaDelMes = new Date(periodo.getFullYear(), periodo.getMonth() + 1, 0).getDate();
-        const fechaVencimiento = new Date(
-          periodo.getFullYear(),
-          periodo.getMonth(),
-          Math.min(contrato.diaPago, ultimoDiaDelMes),
-        );
+    const inicioContrato = this.fechaLocalDesdeColumnaDate(contrato.fechaInicio);
+    const primerPeriodo = this.primerDiaMes(inicioContrato);
+    const hoy = new Date();
+    // Último periodo a generar: mes en curso + (horizonte - 1) meses de anticipación.
+    const ultimoPeriodo = new Date(hoy.getFullYear(), hoy.getMonth() + Math.max(0, horizonte - 1), 1);
 
-        await repo.save(
-          repo.create({
-            contrato,
-            tipo: TipoObligacion.CANON,
-            concepto: `Canon de arrendamiento ${this.formatoPeriodo(periodo)}`,
-            periodo,
-            fechaVencimiento,
-            valorOriginal: contrato.canonValor,
-            estado: EstadoObligacion.PENDIENTE,
-          }),
-        );
-        generadas++;
+    let generadas = 0;
+    for (
+      let periodo = new Date(primerPeriodo);
+      periodo.getTime() <= ultimoPeriodo.getTime();
+      periodo = new Date(periodo.getFullYear(), periodo.getMonth() + 1, 1)
+    ) {
+      const yaExiste = await repo.findOne({
+        where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON, periodo },
+      });
+      if (yaExiste) continue;
+
+      // `contrato.diaPago` puede ser 29-31; si el mes del periodo tiene menos días, se usa el
+      // último día real del mes en vez de dejar que `Date` haga overflow al mes siguiente
+      // (ej: diaPago=31 en febrero no debe vencer el 2-3 de marzo).
+      const ultimoDiaDelMes = new Date(periodo.getFullYear(), periodo.getMonth() + 1, 0).getDate();
+      let fechaVencimiento = new Date(
+        periodo.getFullYear(),
+        periodo.getMonth(),
+        Math.min(contrato.diaPago, ultimoDiaDelMes),
+      );
+      // El primer canon nunca vence antes del inicio del contrato (LB-7): un contrato que
+      // arranca el 18 con diaPago=5 no nace ya "vencido" el día 5 de ese mes.
+      if (fechaVencimiento.getTime() < inicioContrato.getTime()) {
+        fechaVencimiento = inicioContrato;
       }
-      return generadas;
-    });
+
+      await repo.save(
+        repo.create({
+          contrato,
+          tipo: TipoObligacion.CANON,
+          concepto: `Canon de arrendamiento ${this.formatoPeriodo(periodo)}`,
+          periodo,
+          fechaVencimiento,
+          valorOriginal: contrato.canonValor,
+          estado: EstadoObligacion.PENDIENTE,
+        }),
+      );
+      generadas++;
+    }
+    return generadas;
+  }
+
+  private async horizonteCanon(manager?: EntityManager): Promise<number> {
+    const repo = manager ? manager.getRepository(Empresa) : this.empresaRepo;
+    const empresa = await repo.find({ take: 1 });
+    return empresa[0]?.horizonteMesesCanon ?? 3;
   }
 
   /** Crea la obligación tipo NOVEDAD al ser aprobada por el Administrador. */
@@ -117,14 +159,12 @@ export class ObligacionesService {
   }
 
   /**
-   * Obligaciones con saldo por cobrar de un contrato: capital pendiente/parcial, MÁS las que
-   * ya tienen el capital PAGADA pero aún les queda mora sin cobrar (posible cuando un pago
-   * alcanzó para saldar canon/novedad pero no toda la mora congelada — hallazgo RECAUDO-01).
-   * Mora pendiente recalculada al momento de la consulta.
+   * Obligaciones con saldo por cobrar de un contrato: capital PENDIENTE/PARCIAL. Incluye tanto
+   * las VENCIDAS como las que aún no vencen (el cajero debe poder cobrar un canon por
+   * adelantado); cada una trae `vencida` para que la ficha las separe en "Vencidas" / "Por
+   * vencer".
    */
-  async pendientesPorContrato(contratoId: string): Promise<Obligacion[]> {
-    const historial = await this.obtenerHistorialTasas();
-
+  async pendientesPorContrato(contratoId: string): Promise<ObligacionConVencida[]> {
     const obligaciones = await this.repo
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.contrato', 'contrato')
@@ -136,7 +176,7 @@ export class ObligacionesService {
       .orderBy('o.fechaVencimiento', 'ASC')
       .getMany();
 
-    return obligaciones.map((o) => ({ ...o, valorMoraAcumulada: this.moraPendiente(o, historial) }));
+    return obligaciones.map((o) => ({ ...o, vencida: this.esVencida(o.fechaVencimiento) }));
   }
 
   private queryTodasPendientes() {
@@ -145,74 +185,61 @@ export class ObligacionesService {
       .leftJoinAndSelect('o.contrato', 'contrato')
       .leftJoinAndSelect('contrato.cliente', 'cliente')
       .leftJoinAndSelect('contrato.inmueble', 'inmueble')
-      .where(this.condicionSaldoPendiente())
+      .where(this.condicionCarteraVencida())
       .setParameters(this.parametrosCondicionSaldoPendiente())
       .orderBy('o.fechaVencimiento', 'ASC');
   }
 
   /**
-   * Todas las obligaciones con saldo por cobrar del sistema (capital pendiente/parcial, o
-   * capital PAGADA con mora aún sin cobrar), con mora pendiente recalculada. Base del reporte
-   * consolidado de cartera (Excel) y de la cifra `carteraTotal` del dashboard.
+   * Cartera CONSOLIDADA (solo lo VENCIDO): toda obligación con saldo de capital por cobrar cuyo
+   * `fechaVencimiento` ya pasó. El canon generado por adelantado para meses que aún no vencen
+   * NO cuenta como deuda (decisión de negocio). Base del reporte de cartera (Excel), de la
+   * pantalla Cartera y de la cifra `carteraTotal` del dashboard.
    */
   async todasPendientes(): Promise<Obligacion[]> {
-    const historial = await this.obtenerHistorialTasas();
-    const obligaciones = await this.queryTodasPendientes().getMany();
-    return obligaciones.map((o) => ({ ...o, valorMoraAcumulada: this.moraPendiente(o, historial) }));
+    return this.queryTodasPendientes().getMany();
   }
 
   /**
-   * Misma cartera consolidada que `todasPendientes()`, paginada — para la pantalla interactiva
+   * Misma cartera vencida que `todasPendientes()`, paginada — para la pantalla interactiva
    * de Cartera (a diferencia del reporte Excel, que necesita el listado completo de una vez).
    */
   async todasPendientesPaginadas(
     page?: string | number,
     limit?: string | number,
   ): Promise<ResultadoPaginado<Obligacion>> {
-    const historial = await this.obtenerHistorialTasas();
-    const resultado = await paginar(this.queryTodasPendientes(), page, limit);
-    return {
-      ...resultado,
-      data: resultado.data.map((o) => ({ ...o, valorMoraAcumulada: this.moraPendiente(o, historial) })),
-    };
+    return paginar(this.queryTodasPendientes(), page, limit);
   }
 
   /**
    * Condición SQL compartida (usada también por `RecaudoService.registrarPago`): una
-   * obligación tiene saldo por cobrar si su capital sigue PENDIENTE/PARCIAL, o si ya quedó
-   * PAGADA pero la mora congelada supera lo ya pagado de mora.
+   * obligación tiene saldo por cobrar si su capital sigue PENDIENTE/PARCIAL. NO filtra por
+   * fecha: incluye canon por vencer (pago adelantado).
    */
   condicionSaldoPendiente(alias = 'o'): string {
-    return `(${alias}.estado IN (:...estadosCapitalPendiente) OR (${alias}.estado = :estadoPagada AND ${alias}.valorMoraAcumulada > ${alias}.valorMoraPagada))`;
+    return `${alias}.estado IN (:...estadosCapitalPendiente)`;
+  }
+
+  /**
+   * Cartera VENCIDA: `condicionSaldoPendiente` + `fechaVencimiento <= hoy`. Es "lo que
+   * realmente se debe" — separa la deuda exigible del canon generado por adelantado.
+   */
+  condicionCarteraVencida(alias = 'o'): string {
+    return `(${this.condicionSaldoPendiente(alias)} AND ${alias}.fechaVencimiento <= CURDATE())`;
   }
 
   parametrosCondicionSaldoPendiente() {
     return {
       estadosCapitalPendiente: [EstadoObligacion.PENDIENTE, EstadoObligacion.PARCIAL],
-      estadoPagada: EstadoObligacion.PAGADA,
     };
   }
 
-  /**
-   * Historial completo de tasas de mora (§MORA-02), ordenado ascendente por `vigenteDesde`.
-   * `calcularMoraViva` prorratea cada obligación segmento por segmento contra este historial,
-   * en vez de aplicar la tasa actual a la totalidad de los días de atraso.
-   */
-  async obtenerHistorialTasas(): Promise<HistorialTasaMora[]> {
-    const historial = await this.historialTasaRepo.find({ order: { vigenteDesde: 'ASC' } });
-    if (historial.length > 0) return historial;
-
-    // Defensivo: solo puede ocurrir si la migración de siembra no llegó a ejecutarse.
-    const empresa = await this.empresaRepo.find({ take: 1 });
-    return [
-      {
-        id: '',
-        diasGraciaMora: empresa[0]?.diasGraciaMora ?? 5,
-        porcentajeMoraMensual: Number(empresa[0]?.porcentajeMoraMensual ?? 1.5),
-        vigenteDesde: '2000-01-01',
-        creadoEn: new Date(),
-      },
-    ];
+  /** `true` si la obligación ya venció (fecha de vencimiento en el pasado o es hoy). */
+  esVencida(fechaVencimiento: Date | string): boolean {
+    const venc = this.fechaLocalDesdeColumnaDate(fechaVencimiento);
+    const ahora = new Date();
+    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    return venc.getTime() <= hoy.getTime();
   }
 
   /**
@@ -221,9 +248,9 @@ export class ObligacionesService {
    * entidad es `Date`. `new Date("YYYY-MM-DD")` interpreta ese string como medianoche UTC
    * (ECMA-262), que en una zona horaria negativa (Bogotá, UTC-5) cae en el día calendario
    * ANTERIOR al leer sus componentes locales — corriendo `fechaVencimiento` un día hacia
-   * atrás y sobreestimando la mora en 1 día. Parsear los componentes Y-M-D directamente evita
-   * el parseo ISO-UTC del constructor `Date` y construye la fecha en el día calendario local
-   * correcto, sin importar la zona horaria del servidor.
+   * atrás. Parsear los componentes Y-M-D directamente evita el parseo ISO-UTC del constructor
+   * `Date` y construye la fecha en el día calendario local correcto, sin importar la zona
+   * horaria del servidor.
    */
   private fechaLocalDesdeColumnaDate(valor: Date | string): Date {
     if (typeof valor === 'string') {
@@ -231,143 +258,6 @@ export class ObligacionesService {
       return new Date(anio, mes - 1, dia);
     }
     return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
-  }
-
-  /** Cuenta días de calendario COMPLETOS incluyendo ambos extremos (ej: mismo día → 1). */
-  private diasEntreInclusive(desde: Date, hasta: Date): number {
-    return Math.floor((hasta.getTime() - desde.getTime()) / 86400000) + 1;
-  }
-
-  /**
-   * Tasa vigente en `fecha`: la última fila del historial (ascendente por `vigenteDesde`) cuyo
-   * `vigenteDesde` no sea posterior a `fecha`. El historial siempre trae al menos una fila
-   * (sembrada por migración o por el fallback de `obtenerHistorialTasas`), así que se usa la
-   * primera como piso para cualquier fecha anterior a su propio `vigenteDesde`.
-   */
-  private tasaVigenteEn(historial: HistorialTasaMora[], fecha: Date): HistorialTasaMora {
-    let vigente = historial[0];
-    for (const fila of historial) {
-      if (this.fechaLocalDesdeColumnaDate(fila.vigenteDesde).getTime() <= fecha.getTime()) vigente = fila;
-      else break;
-    }
-    return vigente;
-  }
-
-  /**
-   * Mora "en vivo": % mensual prorrateado por días de atraso tras el periodo de gracia, sobre
-   * el capital pendiente actual.
-   *
-   * Hallazgo MORA-01 de la auditoría: el ejemplo oficial de la especificación (§11.1) define
-   * la gracia como días de calendario INCLUSIVOS contando desde `fechaVencimiento` — con
-   * fecha de pago 10-ago y 5 días de gracia, el período de gracia es 10,11,12,13,14 (5 días)
-   * y "la mora inicia el 15 de agosto". Es decir, el ÚLTIMO día de gracia es
-   * `fechaVencimiento + diasGracia - 1`, no `fechaVencimiento + diasGracia`.
-   *
-   * Hallazgo MORA-02 de la auditoría: en vez de aplicar una única tasa plana a la totalidad de
-   * los días de atraso, el cálculo recorre `historial` (ordenado ascendente por `vigenteDesde`)
-   * y prorratea segmento por segmento — cada tramo de días paga la tasa que efectivamente
-   * estuvo vigente durante esos días, así un cambio de tasa hoy nunca reabre el cálculo de
-   * días que ya transcurrieron bajo la tasa anterior. `diasGraciaMora` se toma de la tasa
-   * vigente al momento del vencimiento (define cuándo empieza a correr la mora); cada tramo
-   * posterior usa su propio `porcentajeMoraMensual`.
-   */
-  private calcularMoraViva(obligacion: Obligacion, historial: HistorialTasaMora[]): number {
-    const saldo = Number(obligacion.valorOriginal) - Number(obligacion.valorAbonado);
-    if (saldo <= 0 || historial.length === 0) return 0;
-
-    const vencimiento = this.fechaLocalDesdeColumnaDate(obligacion.fechaVencimiento);
-    const tasaAlVencer = this.tasaVigenteEn(historial, vencimiento);
-
-    const ultimoDiaDeGracia = new Date(vencimiento);
-    ultimoDiaDeGracia.setDate(ultimoDiaDeGracia.getDate() + tasaAlVencer.diasGraciaMora - 1);
-
-    const inicioMora = new Date(ultimoDiaDeGracia);
-    inicioMora.setDate(inicioMora.getDate() + 1);
-
-    const ahora = new Date();
-    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-    if (hoy.getTime() < inicioMora.getTime()) return 0;
-
-    let mora = 0;
-    for (let i = 0; i < historial.length; i++) {
-      const desde = this.fechaLocalDesdeColumnaDate(historial[i].vigenteDesde);
-      let hasta = hoy;
-      if (i + 1 < historial.length) {
-        hasta = this.fechaLocalDesdeColumnaDate(historial[i + 1].vigenteDesde);
-        hasta.setDate(hasta.getDate() - 1);
-      }
-
-      const segmentoInicio = desde.getTime() > inicioMora.getTime() ? desde : inicioMora;
-      const segmentoFin = hasta.getTime() < hoy.getTime() ? hasta : hoy;
-      if (segmentoInicio.getTime() > segmentoFin.getTime()) continue;
-
-      const dias = this.diasEntreInclusive(segmentoInicio, segmentoFin);
-      const moraDiaria = (saldo * (Number(historial[i].porcentajeMoraMensual) / 100)) / 30;
-      mora += moraDiaria * dias;
-    }
-
-    return Math.round(mora * 100) / 100;
-  }
-
-  /**
-   * Mora pendiente de cobro = el mayor valor entre la mora ya "congelada" (`valorMoraAcumulada`)
-   * y la recién calculada en vivo, menos lo que ya se pagó (`valorMoraPagada`). Nunca negativa.
-   * Es un cálculo puro de lectura (no persiste); para congelar el valor antes de un pago, usar
-   * `congelarMora`.
-   */
-  private moraPendiente(obligacion: Obligacion, historial: HistorialTasaMora[]): number {
-    const viva = this.calcularMoraViva(obligacion, historial);
-    const congelada = Math.max(Number(obligacion.valorMoraAcumulada), viva);
-    return Math.max(0, Math.round((congelada - Number(obligacion.valorMoraPagada)) * 100) / 100);
-  }
-
-  /**
-   * Congela (ratchet) la mora acumulada de una obligación en `valorMoraAcumulada`, tomando el
-   * mayor valor entre lo ya registrado y la mora en vivo actual. Debe llamarse ANTES de aplicar
-   * cualquier abono de capital de un pago sobre la obligación: una vez el capital llega a 0, la
-   * fórmula en vivo siempre da 0, así que sin congelar antes, la mora ya devengada pero no
-   * cobrada se perdería para siempre (hallazgo RECAUDO-01 de la auditoría). Devuelve la mora
-   * pendiente de cobro resultante (congelada - ya pagada).
-   */
-  async congelarMora(id: string, historial: HistorialTasaMora[], manager: EntityManager): Promise<number> {
-    const repo = manager.getRepository(Obligacion);
-    const obligacion = await repo
-      .createQueryBuilder('o')
-      .setLock('pessimistic_write')
-      .where('o.id = :id', { id })
-      .getOneOrFail();
-
-    const pendiente = this.moraPendiente(obligacion, historial);
-    const congelada = Math.max(Number(obligacion.valorMoraAcumulada), this.calcularMoraViva(obligacion, historial));
-    if (congelada !== Number(obligacion.valorMoraAcumulada)) {
-      obligacion.valorMoraAcumulada = congelada;
-      await repo.save(obligacion);
-    }
-    return pendiente;
-  }
-
-  /** Aplica un abono a la mora pendiente (usado por RecaudoService dentro de una transacción, tercer destino tras Canon→Novedad). */
-  async aplicarAbonoMora(id: string, monto: number, manager: EntityManager): Promise<Obligacion> {
-    const repo = manager.getRepository(Obligacion);
-    const obligacion = await repo
-      .createQueryBuilder('o')
-      .setLock('pessimistic_write')
-      .where('o.id = :id', { id })
-      .getOneOrFail();
-    obligacion.valorMoraPagada = Number(obligacion.valorMoraPagada) + monto;
-    return repo.save(obligacion);
-  }
-
-  /** Revierte exactamente un abono de mora previamente aplicado (usado al anular un recibo). Nunca queda en negativo. */
-  async revertirAbonoMora(id: string, monto: number, manager: EntityManager): Promise<Obligacion> {
-    const repo = manager.getRepository(Obligacion);
-    const obligacion = await repo
-      .createQueryBuilder('o')
-      .setLock('pessimistic_write')
-      .where('o.id = :id', { id })
-      .getOneOrFail();
-    obligacion.valorMoraPagada = Math.max(0, Number(obligacion.valorMoraPagada) - monto);
-    return repo.save(obligacion);
   }
 
   async obtener(id: string): Promise<Obligacion> {
@@ -408,7 +298,15 @@ export class ObligacionesService {
     });
   }
 
-  /** Aplica un abono a la obligación (usado por RecaudoService dentro de una transacción). */
+  /**
+   * Aplica un abono a la obligación (usado por RecaudoService dentro de una transacción).
+   * `valorAbonado` se redondea a 2 decimales en cada escritura (hallazgo B2 de la auditoría
+   * contable 2026-09-01): sin este punto único de redondeo, el drift de punto flotante entre
+   * lo que el código calcula y lo que MariaDB persiste (`decimal(12,2)`) podía dejar una
+   * obligación atascada en PARCIAL por fracciones de centavo. `>= valorOriginal` se evalúa con
+   * la misma tolerancia (`esCeroMoneda` sobre la diferencia) para no depender de que ambos
+   * lados redondeen exactamente igual.
+   */
   async aplicarAbono(id: string, monto: number, manager: EntityManager): Promise<Obligacion> {
     const repo = manager.getRepository(Obligacion);
     const obligacion = await repo
@@ -417,11 +315,10 @@ export class ObligacionesService {
       .where('o.id = :id', { id })
       .getOneOrFail();
 
-    obligacion.valorAbonado = Number(obligacion.valorAbonado) + monto;
+    obligacion.valorAbonado = redondearMoneda(Number(obligacion.valorAbonado) + monto);
+    const saldoRestante = Number(obligacion.valorOriginal) - Number(obligacion.valorAbonado);
     obligacion.estado =
-      Number(obligacion.valorAbonado) >= Number(obligacion.valorOriginal)
-        ? EstadoObligacion.PAGADA
-        : EstadoObligacion.PARCIAL;
+      saldoRestante <= 0 || esCeroMoneda(saldoRestante) ? EstadoObligacion.PAGADA : EstadoObligacion.PARCIAL;
 
     return repo.save(obligacion);
   }
@@ -429,6 +326,8 @@ export class ObligacionesService {
   /**
    * Revierte exactamente un abono previamente aplicado (usado al anular un recibo).
    * Nunca queda en negativo: resta el monto y recalcula el estado (PAGADA/PARCIAL/PENDIENTE).
+   * Igual que `aplicarAbono`, redondea en cada escritura y trata un residuo por debajo de medio
+   * centavo como cero, para no dejar la obligación en PARCIAL "fantasma" tras un reverso exacto.
    */
   async revertirAbono(id: string, monto: number, manager: EntityManager): Promise<Obligacion> {
     const repo = manager.getRepository(Obligacion);
@@ -438,14 +337,33 @@ export class ObligacionesService {
       .where('o.id = :id', { id })
       .getOneOrFail();
 
-    obligacion.valorAbonado = Math.max(0, Number(obligacion.valorAbonado) - monto);
+    const restante = redondearMoneda(Number(obligacion.valorAbonado) - monto);
+    obligacion.valorAbonado = esCeroMoneda(restante) ? 0 : Math.max(0, restante);
     obligacion.estado =
-      Number(obligacion.valorAbonado) <= 0
+      obligacion.valorAbonado <= 0
         ? EstadoObligacion.PENDIENTE
         : Number(obligacion.valorAbonado) >= Number(obligacion.valorOriginal)
           ? EstadoObligacion.PAGADA
           : EstadoObligacion.PARCIAL;
 
+    return repo.save(obligacion);
+  }
+
+  /**
+   * @deprecated Solo existe para poder revertir, con el método correcto, un recibo histórico
+   * cuya `AplicacionPago.concepto` haya quedado en `MORA` (columna heredada del motor de mora,
+   * retirado por decisión de negocio el 2026-09-01 — ver `RecaudoService.anular`). El motor
+   * actual nunca genera abonos de concepto MORA; no usar en código nuevo.
+   */
+  async revertirAbonoMora(id: string, monto: number, manager: EntityManager): Promise<Obligacion> {
+    const repo = manager.getRepository(Obligacion);
+    const obligacion = await repo
+      .createQueryBuilder('o')
+      .setLock('pessimistic_write')
+      .where('o.id = :id', { id })
+      .getOneOrFail();
+    const restante = redondearMoneda(Number(obligacion.valorMoraPagada) - monto);
+    obligacion.valorMoraPagada = esCeroMoneda(restante) ? 0 : Math.max(0, restante);
     return repo.save(obligacion);
   }
 
@@ -480,12 +398,6 @@ export class ObligacionesService {
 
   private primerDiaMes(fecha: Date): Date {
     return new Date(fecha.getFullYear(), fecha.getMonth(), 1);
-  }
-
-  private sumarMeses(fecha: Date, meses: number): Date {
-    const copia = new Date(fecha);
-    copia.setMonth(copia.getMonth() + meses);
-    return copia;
   }
 
   private formatoPeriodo(fecha: Date): string {

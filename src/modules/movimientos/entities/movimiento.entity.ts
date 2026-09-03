@@ -9,7 +9,7 @@ export enum TipoMovimiento {
 export enum OrigenMovimiento {
   RECAUDO = 'RECAUDO', // ingreso generado por un recibo de caja
   NOVEDAD = 'NOVEDAD', // egreso aprobado desde una novedad (gasto inmobiliaria)
-  DEPOSITO = 'DEPOSITO', // egreso por devolución de depósito en custodia
+  DEPOSITO = 'DEPOSITO', // egreso por devolución de depósito de garantía
   MANUAL = 'MANUAL', // egreso/ingreso manual registrado por el Administrador
 }
 

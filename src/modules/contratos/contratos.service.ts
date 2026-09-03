@@ -11,7 +11,10 @@ import { Cliente } from '../personas/entities/cliente.entity';
 import { Codeudor } from '../personas/entities/codeudor.entity';
 import { Inmueble, EstadoInmueble } from '../inmuebles/entities/inmueble.entity';
 import { ObligacionesService } from '../obligaciones/obligaciones.service';
+import { MovimientosService } from '../movimientos/movimientos.service';
+import { OrigenMovimiento } from '../movimientos/entities/movimiento.entity';
 import { paginar } from '../../common/utils/paginar.util';
+import { fechaLocalDesdeString } from '../../common/utils/fecha.util';
 
 @Injectable()
 export class ContratosService {
@@ -19,6 +22,7 @@ export class ContratosService {
     @InjectRepository(Contrato) private readonly repo: Repository<Contrato>,
     private readonly dataSource: DataSource,
     private readonly obligacionesService: ObligacionesService,
+    private readonly movimientosService: MovimientosService,
   ) {}
 
   /**
@@ -28,7 +32,7 @@ export class ContratosService {
    * - fecha_fin queda explícitamente NULL.
    * - Marca el inmueble como OCUPADO.
    */
-  async crear(dto: CreateContratoDto): Promise<Contrato> {
+  async crear(dto: CreateContratoDto, registradoPorEmail: string): Promise<Contrato> {
     return this.dataSource.transaction(async (manager) => {
       const cliente = await manager.findOne(Cliente, { where: { id: dto.clienteId, activo: true } });
       if (!cliente) throw new NotFoundException('Cliente no encontrado o inactivo.');
@@ -65,15 +69,31 @@ export class ContratosService {
       // día calendario ANTERIOR — el mismo mecanismo del hallazgo MORA-01.
       const diaPago = dto.diaPago ?? Number(dto.fechaInicio.slice(0, 10).split('-')[2]);
 
+      // Hallazgo B5 de la auditoría contable 2026-09-01: si se recibe depósito de garantía,
+      // exige su medio de pago ANTES de crear nada — mismo principio de CAJA-01 (una devolución
+      // en efectivo mueve caja física, una por transferencia mueve control bancario; nunca debe
+      // quedar dinero real "sin medio"). Antes, el depósito nunca generaba un INGRESO al
+      // cobrarse (solo un EGRESO al devolverse en `RecaudoService.liquidarDeposito`), así que
+      // `caja/saldo-esperado` quedaba subestimado durante toda la vigencia del contrato.
+      const depositoGarantia = dto.depositoGarantia ?? inmueble.depositoValor ?? 0;
+      if (depositoGarantia > 0 && !dto.medioPagoDeposito) {
+        throw new BadRequestException(
+          'Debe indicar el medio de pago (efectivo/transferencia) del depósito de garantía recibido.',
+        );
+      }
+
       const contrato = manager.create(Contrato, {
         cliente,
         codeudores,
         inmueble,
-        fechaInicio: new Date(dto.fechaInicio),
+        // `fechaLocalDesdeString` (no `new Date(dto.fechaInicio)`): mismo mecanismo de fondo
+        // que MORA-01/CONT-04 — con zona horaria negativa, `new Date("YYYY-MM-DD")` persistía
+        // el día calendario ANTERIOR en esta columna `date`.
+        fechaInicio: fechaLocalDesdeString(dto.fechaInicio),
         fechaFin: null, // explícito: sin fecha de fin al crear
         diaPago,
         canonValor: inmueble.canonValor,
-        depositoCustodia: dto.depositoCustodia ?? inmueble.depositoValor ?? 0,
+        depositoGarantia,
         estado: EstadoContrato.ACTIVO,
       });
 
@@ -85,16 +105,38 @@ export class ContratosService {
 
       const guardado = await manager.save(contrato);
 
+      // Genera el canon del contrato de una vez (desde `fechaInicio` hasta el horizonte
+      // futuro), dentro de la misma transacción: antes el contrato quedaba sin ninguna
+      // obligación hasta que corriera el cron de la 1 AM, y un pago en esa ventana se
+      // convertía íntegramente en excedente sin abonar nada.
+      await this.obligacionesService.generarCanonesParaContrato(guardado.id, { manager });
+
+      if (depositoGarantia > 0) {
+        await this.movimientosService.registrarIngreso(
+          {
+            origen: OrigenMovimiento.DEPOSITO,
+            concepto: `Depósito de garantía recibido — contrato ${guardado.id}`,
+            monto: depositoGarantia,
+            registradoPorEmail,
+            contratoId: guardado.id,
+            medioPago: dto.medioPagoDeposito!,
+            referencia: dto.referenciaDeposito ?? null,
+          },
+          manager,
+        );
+      }
+
       return guardado;
     });
   }
 
   private construirQueryListado(filtro: FilterContratoDto) {
+    // Solo cliente + inmueble: ni la tabla del listado ni el export `reporte-contratos.xlsx`
+    // usan los codeudores. La ficha de detalle (`obtener()`) sí los carga.
     const qb = this.repo
       .createQueryBuilder('c')
       .leftJoinAndSelect('c.cliente', 'cliente')
-      .leftJoinAndSelect('c.inmueble', 'inmueble')
-      .leftJoinAndSelect('c.codeudores', 'codeudores');
+      .leftJoinAndSelect('c.inmueble', 'inmueble');
 
     if (filtro.busqueda) {
       qb.andWhere('(cliente.numeroDocumento LIKE :b OR cliente.nombreCompleto LIKE :b)', {
@@ -127,7 +169,7 @@ export class ContratosService {
 
   /**
    * Ficha de recaudo por inmueble/contrato: expone lo requerido por el motor financiero
-   * (historial, barrio, arrendatario, codeudores, saldo a favor, depósito en custodia,
+   * (historial, barrio, arrendatario, codeudores, saldo a favor, depósito de garantía,
    * y las obligaciones pendientes/parciales con su mora recalculada al momento de la consulta,
    * para que el cajero vea exactamente qué debe cobrar antes de registrar un pago).
    */
@@ -141,7 +183,7 @@ export class ContratosService {
       arrendatario: contrato.cliente,
       codeudores: contrato.codeudores,
       saldoAFavor: contrato.saldoAFavor,
-      depositoCustodia: contrato.depositoCustodia,
+      depositoGarantia: contrato.depositoGarantia,
       obligacionesPendientes,
     };
   }
@@ -157,7 +199,7 @@ export class ContratosService {
 
       const estadoAnterior = contrato.estado;
       contrato.estado = EstadoContrato.TERMINADO;
-      contrato.fechaFin = new Date(dto.fechaFin);
+      contrato.fechaFin = fechaLocalDesdeString(dto.fechaFin);
       contrato.motivoTerminacion = dto.motivoTerminacion;
       await manager.save(contrato);
 

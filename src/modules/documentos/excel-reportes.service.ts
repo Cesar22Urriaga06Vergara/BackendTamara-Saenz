@@ -51,6 +51,14 @@ export class ExcelReportesService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
+  /**
+   * Hallazgo B9 de la auditoría contable 2026-09-01: el reporte mezclaba en una sola columna
+   * recibos `EMITIDO`, `ANULADO` y de liquidación de depósito (`esLiquidacionDeposito`, que no
+   * mueve caja), sin distinción de tipo — un `SUM` manual de `Valor total` sobre la hoja
+   * contaba dinero que en realidad se revirtió o que nunca entró a caja. Se agrega la columna
+   * "Tipo de documento" y una fila de totales que solo suma recibos `EMITIDO` que no son
+   * liquidación de depósito (el mismo universo que `DashboardService.metricasFinancieras`).
+   */
   async reporteRecaudo(recibos: any[]): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Recaudo');
@@ -61,24 +69,43 @@ export class ExcelReportesService {
       { header: 'Arrendatario', key: 'arrendatario', width: 30 },
       { header: 'Inmueble', key: 'inmueble', width: 35 },
       { header: 'Barrio', key: 'barrio', width: 20 },
+      { header: 'Tipo de documento', key: 'tipoDocumento', width: 20 },
       { header: 'Valor total', key: 'valorTotal', width: 16 },
       { header: 'Excedente', key: 'excedente', width: 16 },
       { header: 'Estado', key: 'estado', width: 14 },
     ];
     this.aplicarEstiloEncabezado(sheet, 1);
 
+    let totalRecaudoNeto = 0;
+
     recibos.forEach((r) => {
+      const tipoDocumento = r.esLiquidacionDeposito ? 'Liquidación depósito' : 'Pago';
       sheet.addRow({
         consecutivo: r.consecutivo,
         fecha: r.creadoEn,
         arrendatario: r.contrato?.cliente?.nombreCompleto,
         inmueble: r.contrato?.inmueble?.direccion,
         barrio: r.contrato?.inmueble?.barrio,
+        tipoDocumento,
         valorTotal: Number(r.valorTotal),
         excedente: Number(r.excedente),
         estado: r.estado,
       });
+
+      if (r.estado === 'EMITIDO' && !r.esLiquidacionDeposito) {
+        totalRecaudoNeto += Number(r.valorTotal) - (r.excedenteComoSaldoFavor ? 0 : Number(r.excedente));
+      }
     });
+
+    const filaTotales = sheet.addRow({
+      consecutivo: 'TOTAL RECAUDO NETO (emitido, sin liquidaciones de depósito, sin cambio devuelto)',
+      valorTotal: totalRecaudoNeto,
+    });
+    filaTotales.font = { bold: true };
+    filaTotales.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+    });
+
     sheet.getColumn('valorTotal').numFmt = '$ #,##0';
     sheet.getColumn('excedente').numFmt = '$ #,##0';
 
@@ -108,9 +135,9 @@ export class ExcelReportesService {
   }
 
   /**
-   * Reporte consolidado de cartera: obligaciones PENDIENTES/PARCIALES por contrato,
-   * con saldo pendiente y mora acumulada (ya calculada por ObligacionesService).
-   * Incluye una fila de totales al final para el resumen gerencial.
+   * Reporte consolidado de cartera: obligaciones PENDIENTES/PARCIALES por contrato, con saldo
+   * pendiente de capital (sin costo de mora / interés por retraso — retirado por decisión de
+   * negocio el 2026-09-01). Incluye una fila de totales al final para el resumen gerencial.
    */
   async reporteCartera(obligacionesPendientes: any[]): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
@@ -127,18 +154,15 @@ export class ExcelReportesService {
       { header: 'Valor original', key: 'valorOriginal', width: 16 },
       { header: 'Valor abonado', key: 'valorAbonado', width: 16 },
       { header: 'Saldo pendiente', key: 'saldoPendiente', width: 16 },
-      { header: 'Mora acumulada', key: 'moraAcumulada', width: 16 },
       { header: 'Estado', key: 'estado', width: 14 },
     ];
     this.aplicarEstiloEncabezado(sheet, 1);
 
     let totalSaldo = 0;
-    let totalMora = 0;
 
     obligacionesPendientes.forEach((o) => {
       const saldoPendiente = Number(o.valorOriginal) - Number(o.valorAbonado);
       totalSaldo += saldoPendiente;
-      totalMora += Number(o.valorMoraAcumulada ?? 0);
 
       sheet.addRow({
         arrendatario: o.contrato?.cliente?.nombreCompleto,
@@ -151,7 +175,6 @@ export class ExcelReportesService {
         valorOriginal: Number(o.valorOriginal),
         valorAbonado: Number(o.valorAbonado),
         saldoPendiente,
-        moraAcumulada: Number(o.valorMoraAcumulada ?? 0),
         estado: o.estado,
       });
     });
@@ -159,14 +182,13 @@ export class ExcelReportesService {
     const filaTotales = sheet.addRow({
       arrendatario: 'TOTAL CARTERA',
       saldoPendiente: totalSaldo,
-      moraAcumulada: totalMora,
     });
     filaTotales.font = { bold: true };
     filaTotales.eachCell((cell) => {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
     });
 
-    ['valorOriginal', 'valorAbonado', 'saldoPendiente', 'moraAcumulada'].forEach((key) => {
+    ['valorOriginal', 'valorAbonado', 'saldoPendiente'].forEach((key) => {
       sheet.getColumn(key).numFmt = '$ #,##0';
     });
 

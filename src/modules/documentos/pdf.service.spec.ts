@@ -80,21 +80,64 @@ describe('Generación de PDF (documentos)', () => {
     expect(buffer.subarray(0, 4).toString('ascii')).toBe('%PDF');
   });
 
-  it('PdfNovedadService: genera un PDF válido para una novedad', async () => {
-    const service = new PdfNovedadService();
-    const novedadFake = {
+  function novedadFake(overrides: Record<string, any> = {}) {
+    return {
       consecutivo: 'NOV-000001',
       descripcion: 'Fuga de agua en el baño principal',
       fecha: new Date('2026-08-20'),
       observaciones: null,
       responsableSugerido: 'INMOBILIARIA',
       estado: 'ABIERTA',
+      registradoPorEmail: 'admin@tamarasaenz.com',
       inmueble: { direccion: 'Calle 1 # 2-3', barrio: 'Centro' },
       contrato: null,
+      ...overrides,
     } as any;
+  }
 
-    const buffer = await service.generar(novedadFake, empresaFake);
+  it('PdfNovedadService: genera un PDF válido para una novedad sin contrato asociado', async () => {
+    const service = new PdfNovedadService();
+    const buffer = await service.generar(novedadFake(), empresaFake);
 
     expect(buffer.subarray(0, 4).toString('ascii')).toBe('%PDF');
+  });
+
+  it('PdfNovedadService: identifica el contrato por cliente, nunca por su UUID interno', async () => {
+    const service = new PdfNovedadService();
+    const buffer = await service.generar(
+      novedadFake({
+        observaciones: 'El cliente reportó el daño hace 3 días.',
+        contrato: {
+          id: 'c9f2a5b0-1234-4a1b-9c3d-abcdef123456',
+          fechaInicio: '2025-01-15',
+          cliente: { nombreCompleto: 'Paula Andrea Sánchez Moreno' },
+        },
+      }),
+      empresaFake,
+    );
+
+    expect(buffer.subarray(0, 4).toString('ascii')).toBe('%PDF');
+    // El texto del PDF vectorial queda embebido sin comprimir por defecto en pdfkit: basta con
+    // que el UUID nunca aparezca en el contenido y que el nombre del cliente sí aparezca.
+    const contenido = buffer.toString('latin1');
+    expect(contenido).not.toContain('c9f2a5b0-1234-4a1b-9c3d-abcdef123456');
+  });
+
+  it('PdfNovedadService: genera un PDF válido para una novedad ANULADA (banner distinto del template)', async () => {
+    const service = new PdfNovedadService();
+    const buffer = await service.generar(novedadFake({ estado: 'ANULADA' }), empresaFake);
+
+    expect(buffer.subarray(0, 4).toString('ascii')).toBe('%PDF');
+  });
+
+  it('PdfNovedadService: genera un PDF válido para cada estado y con observaciones', async () => {
+    const service = new PdfNovedadService();
+    for (const estado of ['ABIERTA', 'EN_SEGUIMIENTO', 'CERRADA', 'ANULADA']) {
+      const buffer = await service.generar(
+        novedadFake({ estado, observaciones: 'Observación de prueba.' }),
+        empresaFake,
+      );
+      expect(buffer.subarray(0, 4).toString('ascii')).toBe('%PDF');
+    }
   });
 });

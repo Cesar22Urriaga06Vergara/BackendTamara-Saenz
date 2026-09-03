@@ -19,8 +19,8 @@ export class ContratosController {
   @Post()
   @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA)
   @AuditAction({ modulo: 'CONTRATOS', accion: 'CREAR' })
-  crear(@Body() dto: CreateContratoDto) {
-    return this.service.crear(dto);
+  crear(@Body() dto: CreateContratoDto, @CurrentUser() user: any) {
+    return this.service.crear(dto, user.email);
   }
 
   @Get()

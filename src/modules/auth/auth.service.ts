@@ -8,7 +8,6 @@ import * as crypto from 'crypto';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { LoginDto } from './dto/login.dto';
-import { RegistroInicialDto } from './dto/registro-inicial.dto';
 
 @Injectable()
 export class AuthService {
@@ -27,16 +26,6 @@ export class AuthService {
     const passwordOk = await bcrypt.compare(dto.password, usuario.passwordHash);
     if (!passwordOk) throw new UnauthorizedException('Credenciales inválidas.');
 
-    return this.emitirTokens(usuario.id, usuario.email, usuario.rol);
-  }
-
-  /**
-   * Bootstrap de producción: crea el primer Administrador (único caso en que un endpoint de
-   * `auth` puede crear un usuario) y lo deja sesionado de inmediato, igual que `login()` —
-   * evita el paso extra de iniciar sesión manualmente justo después de registrarse.
-   */
-  async registroInicial(dto: RegistroInicialDto) {
-    const usuario = await this.usuariosService.registrarPrimerAdministrador(dto);
     return this.emitirTokens(usuario.id, usuario.email, usuario.rol);
   }
 

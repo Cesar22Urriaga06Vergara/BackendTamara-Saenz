@@ -9,18 +9,6 @@ export class UpdateEmpresaDto {
 
   @IsOptional()
   @IsInt()
-  @Min(0)
-  @Max(60)
-  diasGraciaMora?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  porcentajeMoraMensual?: number;
-
-  @IsOptional()
-  @IsInt()
   @Min(1)
   @Max(24)
   horizonteMesesCanon?: number;

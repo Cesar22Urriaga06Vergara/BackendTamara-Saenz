@@ -2,7 +2,17 @@ import { Column, CreateDateColumn, Entity, Index, ManyToOne, PrimaryGeneratedCol
 import { Contrato } from '../../contratos/entities/contrato.entity';
 
 /**
- * Un descuento individual aplicado a la liquidación del depósito en custodia de un contrato
+ * - `GENERAL` (default): daños, aseo, servicios — concepto libre, solo baja el valor a devolver.
+ * - `DEUDA`: arriendo/cargo debido — además ABONA la obligación real del contrato con el motor
+ *   de recaudo (orden Canon→Novedad→Mora), para que no quede como cartera viva (hallazgo LB-6).
+ */
+export enum TipoDescuentoDeposito {
+  GENERAL = 'GENERAL',
+  DEUDA = 'DEUDA',
+}
+
+/**
+ * Un descuento individual aplicado a la liquidación del depósito de garantía de un contrato
  * (§19: "Cada descuento debe conservar concepto/motivo y valor"). Antes de esto, la liquidación
  * solo recibía `valorDescuentos: number` — un total agregado sin explicar en qué se descontó
  * (hallazgo DEP-01 de la auditoría). Es un registro histórico inmutable: la liquidación de
@@ -23,6 +33,9 @@ export class DescuentoDeposito {
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   valor: number;
+
+  @Column({ type: 'enum', enum: TipoDescuentoDeposito, default: TipoDescuentoDeposito.GENERAL })
+  tipo: TipoDescuentoDeposito;
 
   @Column({ length: 150 })
   registradoPorEmail: string;

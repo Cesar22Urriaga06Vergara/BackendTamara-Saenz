@@ -60,4 +60,45 @@ describe('ObligacionesService.generarCanonesMensuales (integración) — CONC-01
       .find({ where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON } });
     expect(canones).toHaveLength(3);
   });
+
+  it('back-fill: un contrato con fechaInicio hace 4 meses recibe el canon de TODOS los meses vencidos + el horizonte, sin huecos', async () => {
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth() - 4, 1); // día 1 ⇒ sin overflow de setMonth
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, {
+      canonValor: 450000,
+      diaPago: 10,
+      fechaInicio: inicioMes,
+    });
+
+    await service.generarCanonesMensuales();
+
+    const canones = await testApp.dataSource
+      .getRepository(Obligacion)
+      .find({ where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON }, order: { periodo: 'ASC' } });
+
+    // 4 meses vencidos + mes en curso + 2 de anticipación (horizonte 3) = 7.
+    expect(canones).toHaveLength(7);
+
+    // La columna `periodo` (type: 'date') se lee como string "YYYY-MM-DD"; se compara por
+    // "YYYY-MM" sin pasar por `new Date()` (parseo ISO-UTC que corre el día en zona negativa).
+    const mesDe = (p: unknown) => String(p).slice(0, 7);
+    const yyyymm = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+    // El primer periodo es el mes de fechaInicio y no hay ningún mes salteado (regresión del
+    // bug de `sumarMeses`, que en un día 29-31 se comía un mes).
+    expect(mesDe(canones[0].periodo)).toBe(yyyymm(inicioMes));
+    for (let i = 1; i < canones.length; i++) {
+      const [ya, ym] = mesDe(canones[i - 1].periodo)
+        .split('-')
+        .map(Number);
+      const [aa, am] = mesDe(canones[i].periodo).split('-').map(Number);
+      expect((aa - ya) * 12 + (am - ym)).toBe(1);
+    }
+
+    // Idempotente aunque ya haya deuda histórica.
+    const segunda = await service.generarCanonesMensuales();
+    expect(segunda.generadas).toBe(0);
+  });
 });

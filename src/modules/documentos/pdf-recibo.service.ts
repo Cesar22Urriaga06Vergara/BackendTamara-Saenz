@@ -3,7 +3,6 @@ import * as PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { EstadoRecibo, ReciboCaja } from '../recaudo/entities/recibo-caja.entity';
-import { ConceptoAplicacion } from '../recaudo/entities/aplicacion-pago.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
 
 /**
@@ -215,11 +214,11 @@ export class PdfReciboService {
 
       doc.y = yFilaTabla + espaciado.gapPeque;
 
-      // ---- Tabla de aplicación del pago (a qué obligación/concepto se destinó cada monto) ----
+      // ---- Tabla de aplicación del pago (a qué obligación se destinó cada monto) ----
       // §20 de la especificación: el recibo debe explicar cómo se aplicó el dinero (concepto,
-      // período, mora separada, saldo posterior), no solo mostrar el total recibido por medio
-      // de pago. `recibo.aplicaciones` puede venir vacío en recibos generados antes de este
-      // hallazgo (RECAUDO-03) — en ese caso la tabla simplemente no se dibuja.
+      // período, saldo posterior), no solo mostrar el total recibido por medio de pago.
+      // `recibo.aplicaciones` puede venir vacío en recibos generados antes de este hallazgo
+      // (RECAUDO-03) — en ese caso la tabla simplemente no se dibuja.
       if (recibo.aplicaciones && recibo.aplicaciones.length > 0) {
         doc.moveDown(0.6 * espaciado.escala);
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#1A1A1A').text('Aplicación del pago', margenX, doc.y);
@@ -228,27 +227,23 @@ export class PdfReciboService {
         const colConceptoX = margenX;
         const colConceptoW = 210;
         const colPeriodoX = colConceptoX + colConceptoW;
-        const colPeriodoW = 90;
-        const colTipoX = colPeriodoX + colPeriodoW;
-        const colTipoW = 60;
-        const colValorX = colTipoX + colTipoW;
-        const colValorW = 86;
+        const colPeriodoW = 110;
+        const colValorX = colPeriodoX + colPeriodoW;
+        const colValorW = 106;
         const colSaldoX = colValorX + colValorW;
-        const colSaldoW = anchoContenido - colConceptoW - colPeriodoW - colTipoW - colValorW;
+        const colSaldoW = anchoContenido - colConceptoW - colPeriodoW - colValorW;
 
         const yEncabezadoAplic = doc.y;
         doc.rect(margenX, yEncabezadoAplic, anchoContenido, altoFilaTabla).fill('#4A4D52');
         doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8.5);
         doc.text('CONCEPTO', colConceptoX + 6, yEncabezadoAplic + 6, { width: colConceptoW - 6, align: 'left' });
         doc.text('PERÍODO', colPeriodoX, yEncabezadoAplic + 6, { width: colPeriodoW - 6, align: 'left' });
-        doc.text('TIPO', colTipoX, yEncabezadoAplic + 6, { width: colTipoW - 6, align: 'left' });
         doc.text('VALOR APLIC.', colValorX, yEncabezadoAplic + 6, { width: colValorW - 6, align: 'right' });
         doc.text('SALDO POST.', colSaldoX, yEncabezadoAplic + 6, { width: colSaldoW - 6, align: 'right' });
 
         let yFilaAplic = yEncabezadoAplic + altoFilaTabla;
         recibo.aplicaciones.forEach((aplicacion) => {
           const obligacion = aplicacion.obligacion as any;
-          const tipo = aplicacion.concepto === ConceptoAplicacion.MORA ? 'Mora' : 'Capital';
           doc.font('Helvetica').fontSize(8.5).fillColor('#1A1A1A');
           doc.text(obligacion?.concepto ?? '—', colConceptoX + 6, yFilaAplic + 6, {
             width: colConceptoW - 6,
@@ -258,7 +253,6 @@ export class PdfReciboService {
             width: colPeriodoW - 6,
             align: 'left',
           });
-          doc.text(tipo, colTipoX, yFilaAplic + 6, { width: colTipoW - 6, align: 'left' });
           doc.text(this.formatoMonedaCO(aplicacion.montoAplicado), colValorX, yFilaAplic + 6, {
             width: colValorW - 6,
             align: 'right',

@@ -1,21 +1,17 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Usuario } from './entities/usuario.entity';
 import { Rol } from '../../common/enums/roles.enum';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
-import { RegistroInicialDto } from '../auth/dto/registro-inicial.dto';
 import { PaginacionDto } from '../../common/dto/paginacion.dto';
 import { paginar } from '../../common/utils/paginar.util';
 
 @Injectable()
 export class UsuariosService {
-  constructor(
-    @InjectRepository(Usuario) private readonly repo: Repository<Usuario>,
-    private readonly dataSource: DataSource,
-  ) {}
+  constructor(@InjectRepository(Usuario) private readonly repo: Repository<Usuario>) {}
 
   async crear(dto: CreateUsuarioDto): Promise<Usuario> {
     const existe = await this.repo.findOne({ where: { email: dto.email } });
@@ -79,45 +75,5 @@ export class UsuariosService {
   async cambiarPassword(id: string, nuevaPassword: string): Promise<void> {
     const passwordHash = await bcrypt.hash(nuevaPassword, 10);
     await this.repo.update(id, { passwordHash });
-  }
-
-  /**
-   * Registro del primer Administrador cuando el sistema entra a producción con la base de
-   * datos en blanco (sin usuarios): reemplaza la necesidad de ejecutar `npm run seed` por
-   * consola para crear la cuenta inicial. Funciona SOLO mientras no exista ningún usuario —
-   * en cuanto se crea el primero, queda permanentemente inhabilitado (cualquier intento
-   * posterior recibe 403), para que nunca se convierta en una puerta de registro público.
-   *
-   * La tabla está vacía por definición, así que no hay ninguna fila que bloquear con
-   * `SELECT ... FOR UPDATE`; `GET_LOCK` (MariaDB/MySQL) es la única forma de serializar dos
-   * solicitudes de registro inicial concurrentes para que no pasen ambas el conteo "0
-   * usuarios" al mismo tiempo y terminen creando dos Administradores.
-   */
-  async registrarPrimerAdministrador(dto: RegistroInicialDto): Promise<Usuario> {
-    return this.dataSource.transaction(async (manager) => {
-      await manager.query(`SELECT GET_LOCK('registro_inicial_usuario', 10)`);
-      try {
-        const repo = manager.getRepository(Usuario);
-        const totalUsuarios = await repo.count();
-        if (totalUsuarios > 0) {
-          throw new ForbiddenException(
-            'El registro inicial ya no está disponible: el sistema ya tiene usuarios creados. Solicita una cuenta a un Administrador existente.',
-          );
-        }
-
-        const passwordHash = await bcrypt.hash(dto.password, 10);
-        return repo.save(
-          repo.create({
-            nombreCompleto: dto.nombreCompleto,
-            email: dto.email,
-            passwordHash,
-            rol: Rol.ADMINISTRADOR,
-            activo: true,
-          }),
-        );
-      } finally {
-        await manager.query(`SELECT RELEASE_LOCK('registro_inicial_usuario')`);
-      }
-    });
   }
 }

@@ -280,6 +280,13 @@ Resultado:
 
 # 11. Mora
 
+> **RETIRADO POR DECISIÓN DE NEGOCIO — 2026-09-01.** El sistema ya NO cobra mora / interés por
+> retraso. Los cobros son netos, exclusivamente por canon de arrendamiento (y cargos tipo
+> NOVEDAD aprobados). La sección se conserva como referencia histórica. El orden de aplicación
+> del dinero (§10) pasa a ser **Canon → Novedad**. Toda la lógica de cálculo/congelamiento de
+> mora se retiró de servicios y controladores; ver la bitácora "Retiro del costo de mora +
+> auditoría contable (2026-09-01)" en `README.md`.
+
 ## 11.1 Referencia temporal
 
 La secuencia es:

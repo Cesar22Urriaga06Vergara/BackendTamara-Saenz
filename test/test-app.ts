@@ -7,7 +7,6 @@ import { Codeudor } from '../src/modules/personas/entities/codeudor.entity';
 import { Inmueble, EstadoInmueble } from '../src/modules/inmuebles/entities/inmueble.entity';
 import { Contrato, EstadoContrato } from '../src/modules/contratos/entities/contrato.entity';
 import { Empresa } from '../src/modules/empresa/entities/empresa.entity';
-import { HistorialTasaMora } from '../src/modules/empresa/entities/historial-tasa-mora.entity';
 import { Obligacion, TipoObligacion, EstadoObligacion } from '../src/modules/obligaciones/entities/obligacion.entity';
 import { Propietario } from '../src/modules/propietarios/entities/propietario.entity';
 
@@ -49,7 +48,6 @@ const TABLAS_EN_ORDEN_DE_LIMPIEZA = [
   'inmueble',
   'propietario',
   'consecutivo',
-  'historial_tasa_mora',
   'empresa',
   'registro_auditoria',
 ];
@@ -127,53 +125,34 @@ export async function crearContrato(
       fechaInicio: new Date(),
       diaPago: 5,
       canonValor: inmueble.canonValor,
+      depositoGarantia: inmueble.depositoValor ?? 0,
       estado: EstadoContrato.ACTIVO,
       ...overrides,
     }),
   );
 }
 
-/**
- * Inserta/actualiza la fila única de Empresa con parámetros de mora controlados por el test, y
- * sincroniza `historial_tasa_mora` (MORA-02) con una única fila vigente desde el año 2000 —
- * suficientemente atrás para cubrir cualquier `fechaVencimiento` que fabrique `crearObligacion`.
- * Los tests que necesiten probar un cambio de tasa a mitad de la vida de una obligación deben
- * insertar filas adicionales directamente vía `dataSource.getRepository(HistorialTasaMora)`.
- */
+/** Inserta la fila única de Empresa con los parámetros globales de negocio que el test controle. */
 export async function configurarEmpresa(
   dataSource: DataSource,
-  overrides: Partial<Pick<Empresa, 'diasGraciaMora' | 'porcentajeMoraMensual' | 'saldoInicialCaja'>> = {},
+  overrides: Partial<Pick<Empresa, 'saldoInicialCaja' | 'horizonteMesesCanon'>> = {},
 ): Promise<Empresa> {
   const repo = dataSource.getRepository(Empresa);
-  const empresa = await repo.save(
+  return repo.save(
     repo.create({
       nombre: 'Empresa de pruebas',
       nit: unico('NIT'),
-      diasGraciaMora: overrides.diasGraciaMora ?? 5,
-      porcentajeMoraMensual: overrides.porcentajeMoraMensual ?? 1.5,
       saldoInicialCaja: overrides.saldoInicialCaja ?? 0,
+      horizonteMesesCanon: overrides.horizonteMesesCanon ?? 3,
     }),
   );
-
-  const historialRepo = dataSource.getRepository(HistorialTasaMora);
-  await historialRepo.clear();
-  await historialRepo.save(
-    historialRepo.create({
-      diasGraciaMora: empresa.diasGraciaMora,
-      porcentajeMoraMensual: empresa.porcentajeMoraMensual,
-      vigenteDesde: '2000-01-01' as any,
-    }),
-  );
-
-  return empresa;
 }
 
 /**
- * Crea una obligación con una `fechaVencimiento` desplazada para que, al momento de
- * calcularse la mora (siempre `new Date()` en el service, no inyectable), el atraso resultante
- * sea exactamente `diasAtrasoDeseado` días después del período de gracia. Margen seguro: la
- * prueba completa corre en milisegundos, muy por debajo del umbral de 1 día que podría
- * desplazar el cálculo.
+ * Crea una obligación con `fechaVencimiento` a `diasVencida` días en el pasado (0 = vence hoy,
+ * que ya cuenta como vencida — `esVencida` usa `<=`). Un valor negativo la coloca en el futuro
+ * (canon por vencer). Margen seguro: la prueba corre en milisegundos, muy por debajo del
+ * umbral de 1 día que podría desplazar el cálculo de "vencida".
  */
 export async function crearObligacion(
   dataSource: DataSource,
@@ -181,19 +160,13 @@ export async function crearObligacion(
   params: {
     tipo: TipoObligacion;
     valorOriginal: number;
-    diasGraciaEmpresa: number;
-    diasAtrasoDeseado: number; // 0 = dentro de gracia (mora=0)
+    diasVencida: number;
     concepto?: string;
   },
 ): Promise<Obligacion> {
   const repo = dataSource.getRepository(Obligacion);
-  const hoy = new Date();
-  const fechaVencimiento = new Date(hoy);
-  // El último día de gracia es fechaVencimiento + diasGracia - 1 (MORA-01: la gracia es
-  // inclusiva del día de vencimiento, ej. 10-14 ago para gracia=5 y vencimiento=10-ago), así
-  // que para obtener exactamente `diasAtrasoDeseado` días de mora hay que retroceder un día
-  // adicional respecto del cálculo ingenuo (vencimiento - gracia - atraso).
-  fechaVencimiento.setDate(fechaVencimiento.getDate() - params.diasGraciaEmpresa - params.diasAtrasoDeseado + 1);
+  const fechaVencimiento = new Date();
+  fechaVencimiento.setDate(fechaVencimiento.getDate() - params.diasVencida);
 
   return repo.save(
     repo.create({

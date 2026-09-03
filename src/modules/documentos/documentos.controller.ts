@@ -94,7 +94,7 @@ export class DocumentosController {
     res.send(buffer);
   }
 
-  /** Reporte consolidado de cartera: obligaciones pendientes/parciales con mora, de todos los contratos. */
+  /** Reporte consolidado de cartera: obligaciones pendientes/parciales de todos los contratos. */
   @Get('reportes/cartera.xlsx')
   @AuditAction({ modulo: 'DOCUMENTOS', accion: 'EXPORTAR_REPORTE_CARTERA' })
   async reporteCartera(@Res() res: Response) {

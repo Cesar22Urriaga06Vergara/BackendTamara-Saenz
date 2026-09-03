@@ -4,7 +4,6 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { RegistroInicialDto } from './dto/registro-inicial.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -24,20 +23,6 @@ export class AuthController {
   @AuditAction({ modulo: 'AUTH', accion: 'LOGIN' })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
-  }
-
-  /**
-   * Bootstrap de producción (sin `npm run seed`): solo funciona mientras `usuario` esté
-   * vacía. Throttling igual que login, para no dejar esta ventana abierta a fuerza bruta
-   * mientras el sistema aún no tiene ningún Administrador que pueda notarlo.
-   */
-  @Public()
-  @UseGuards(ThrottlerGuard)
-  @Post('registro-inicial')
-  @HttpCode(HttpStatus.CREATED)
-  @AuditAction({ modulo: 'AUTH', accion: 'REGISTRO_INICIAL' })
-  registroInicial(@Body() dto: RegistroInicialDto) {
-    return this.authService.registroInicial(dto);
   }
 
   @Public()

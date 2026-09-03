@@ -41,6 +41,23 @@ export class ReciboCaja {
   @Column({ default: false })
   excedenteComoSaldoFavor: boolean;
 
+  /**
+   * Saldo a favor PREEXISTENTE que este recibo consumió al aplicarse (FIFO sobre
+   * `SaldoFavorCredito`). Se guarda para que la anulación pueda restituir exactamente esa
+   * porción como un crédito fresco — antes la anulación revertía el capital completo pero no
+   * devolvía el saldo a favor que había financiado parte del pago (hallazgo A3-a).
+   */
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  saldoFavorConsumido: number;
+
+  /**
+   * `true` cuando el recibo lo generó una LIQUIDACIÓN DE DEPÓSITO (descuento tipo DEUDA
+   * aplicado a las obligaciones del contrato), no un pago en efectivo/transferencia. No tiene
+   * movimientos de caja asociados; su reverso va atado al reverso de la liquidación (hallazgo LB-6).
+   */
+  @Column({ default: false })
+  esLiquidacionDeposito: boolean;
+
   @OneToMany(() => DetallePago, (detalle) => detalle.recibo, { cascade: true })
   detallesPago: DetallePago[];
 

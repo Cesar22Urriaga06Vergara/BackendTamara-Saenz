@@ -49,7 +49,8 @@ del esquema completo (16 tablas, todas las foreign keys). **No necesitas correr
 - `novedades`: registro por Recepción + aprobación financiera exclusiva Administrador
   (ya conectada a `obligaciones` y `movimientos`).
 - `obligaciones`: generación mensual automática de canon (CRON diario + disparo manual),
-  cálculo de mora parametrizable, obligaciones tipo `NOVEDAD` desde aprobaciones.
+  obligaciones tipo `NOVEDAD` desde aprobaciones. Cobro neto por capital — sin costo de mora
+  (retirado el 2026-09-01).
 - `recaudo`: motor de pagos mixtos (varios medios en un recibo), aplicación a obligaciones
   por antigüedad, excedente a `saldo_a_favor`, anulación con reverso (nunca `DELETE`),
   liquidación de depósito en custodia al terminar contrato.
@@ -61,7 +62,8 @@ del esquema completo (16 tablas, todas las foreign keys). **No necesitas correr
 ### Todo lo planteado en el super-prompt está cubierto
 No quedan pendientes de alcance funcional. Posibles mejoras futuras (fuera del scope original):
 paginación server-side en el reporte de auditoría exportable a Excel, y notificaciones
-automáticas de mora por correo (hoy la mora se calcula y se muestra, pero no se notifica).
+automáticas de cartera vencida por correo (hoy la cartera se calcula y se muestra, pero no se
+notifica).
 
 ## Novedades de esta última entrega
 - `dashboard`: `GET /dashboard` devuelve métricas operativas para cualquier rol autenticado
@@ -73,8 +75,8 @@ automáticas de mora por correo (hoy la mora se calcula y se muestra, pero no se
   de caja global — la anulación de un recibo deja las obligaciones exactamente como estaban
   antes del pago.
 - `documentos`: nuevo endpoint `GET /documentos/reportes/cartera.xlsx` — reporte consolidado
-  de obligaciones pendientes/parciales de todos los contratos, con saldo y mora acumulada,
-  más una fila de totales al final (`ObligacionesService.todasPendientes()`).
+  de obligaciones pendientes/parciales de todos los contratos, con saldo pendiente y una fila
+  de totales al final (`ObligacionesService.todasPendientes()`).
 - `auditoria`: los filtros `desde`/`hasta` (ya soportados por el service/controller desde el
   inicio) ahora están expuestos en la UI de `/auditoria`.
 
@@ -196,3 +198,31 @@ Los 2 ítems de la Fase 4 (AUD-030, AUD-031) quedaron resueltos:
   en el backend. Moverlo detrás de un guard rompería `configuracion/index.vue` (usa `<img src>`,
   que no puede enviar `Authorization`) sin ganar seguridad real, dado que no hay contenido
   sensible en esa carpeta.
+
+## Retiro del costo de mora + auditoría contable (2026-09-01)
+
+**Decisión de negocio:** el sistema ya NO cobra mora / interés por retraso. Los cobros son
+netos, exclusivamente por **canon de arrendamiento** (y cargos tipo NOVEDAD aprobados). Se
+retiró toda la lógica de mora de servicios y controladores; el orden de aplicación del dinero
+pasa de `Canon → Novedad → Mora` a `Canon → Novedad`.
+
+- **Sin migraciones destructivas.** Las columnas `obligacion.valorMoraAcumulada`,
+  `empresa.diasGraciaMora`, `empresa.porcentajeMoraMensual` y la tabla `historial_tasa_mora`
+  quedan huérfanas en la BD real (todas con `DEFAULT`). `obligacion.valorMoraPagada` y el enum
+  `aplicacion_pago.concepto` se conservan solo como shim de compatibilidad para anular un
+  recibo histórico que hubiera cobrado mora (`ObligacionesService.revertirAbonoMora`).
+- **Hallazgos contables corregidos en el mismo ciclo:**
+  - **B1** — `contrato.saldoAFavor` se recalcula siempre desde `SUM(saldo_favor_credito.montoDisponible)`
+    (`RecaudoService.sincronizarSaldoAFavor`); antes lo mantenían dos estrategias divergentes.
+  - **B2** — redondeo monetario central (`src/common/utils/dinero.util.ts`) en todo el motor de
+    aplicación; DTOs de montos pasan a `@IsInt()` (COP no maneja centavos).
+  - **B4** — `dashboard.recaudoMesActual` excluye los recibos `esLiquidacionDeposito`.
+  - **B5** — recibir depósito en custodia genera un `Movimiento` INGRESO (origen `DEPOSITO`) con
+    su medio de pago; `CreateContratoDto` gana `medioPagoDeposito`/`referenciaDeposito`. Para el
+    histórico: `src/database/seeds/reconciliar-depositos.ts` (dry-run por defecto).
+  - **B6** — `liquidarDeposito` descuenta de la devolución solo la deuda EFECTIVAMENTE abonada.
+  - **B7** — `TerminarContratoDto.motivoTerminacion` ahora `@IsNotEmpty()` + `@MaxLength(300)`.
+  - **B9** — `reporte-recaudo.xlsx` distingue tipo de documento y totaliza solo el recaudo neto.
+- **Frontend (coordinación):** desaparecen `valorMoraAcumulada` / `totalMoraVencida` de las
+  respuestas de ficha-recaudo, obligaciones, `simularPago` y deudores; `PATCH /empresa` rechaza
+  `diasGraciaMora`/`porcentajeMoraMensual`; `POST /recaudo/pagos` rechaza el campo `formato`.

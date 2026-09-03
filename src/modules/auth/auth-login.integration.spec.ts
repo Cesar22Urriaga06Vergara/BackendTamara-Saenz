@@ -5,8 +5,7 @@ import { Rol } from '../../common/enums/roles.enum';
 import { bootstrapTestApp, limpiarBaseDeDatos, TestApp } from '../../../test/test-app';
 
 /**
- * Valida los flujos centrales de sesión: login, refresh (con rotación) y logout — el módulo
- * `auth` solo tenía cobertura de `registroInicial()`; este archivo cubre el resto.
+ * Valida los flujos centrales de sesión: login, refresh (con rotación) y logout.
  */
 describe('AuthService (integración) — login / refresh / logout', () => {
   let testApp: TestApp;

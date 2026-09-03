@@ -3,8 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
-  IsIn,
-  IsNumber,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
@@ -16,7 +15,8 @@ import { MedioPago } from '../entities/detalle-pago.entity';
 
 class DetallePagoInput {
   @IsEnum(MedioPago) medioPago: MedioPago;
-  @IsNumber() @Min(1) monto: number;
+  /** COP no maneja centavos (hallazgo B3 de la auditoría contable 2026-09-01). */
+  @IsInt() @Min(1) monto: number;
   @IsOptional() @IsString() referencia?: string;
 }
 
@@ -29,9 +29,6 @@ export class RegistrarPagoDto {
   @ValidateNested({ each: true })
   @Type(() => DetallePagoInput)
   detallesPago: DetallePagoInput[];
-
-  /** Formato de impresión del recibo. */
-  @IsOptional() @IsIn(['CARTA', 'MEDIA_CARTA']) formato?: 'CARTA' | 'MEDIA_CARTA';
 
   /**
    * Decisión explícita del cliente (RDN-01): por defecto (`false`/ausente), cualquier

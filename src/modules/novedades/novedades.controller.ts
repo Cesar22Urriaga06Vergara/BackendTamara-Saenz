@@ -7,6 +7,7 @@ import { CambiarEstadoNovedadDto } from './dto/cambiar-estado-novedad.dto';
 import { AprobarCargoArrendatarioDto } from './dto/aprobar-cargo-arrendatario.dto';
 import { AprobarGastoInmobiliariaDto } from './dto/aprobar-gasto-inmobiliaria.dto';
 import { PagarGastoInmobiliariaDto } from './dto/pagar-gasto-inmobiliaria.dto';
+import { RevertirAprobacionNovedadDto } from './dto/revertir-aprobacion-novedad.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
@@ -71,6 +72,18 @@ export class NovedadesController {
     @CurrentUser() user: any,
   ) {
     return this.service.aprobarGastoInmobiliaria(id, dto, user.email);
+  }
+
+  /** Revierte una aprobación financiera mal hecha (si aún no se materializó en dinero) — EXCLUSIVO Administrador. */
+  @Patch(':id/revertir-aprobacion')
+  @Roles(Rol.ADMINISTRADOR)
+  @AuditAction({ modulo: 'NOVEDADES', accion: 'REVERTIR_APROBACION' })
+  revertirAprobacion(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RevertirAprobacionNovedadDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.revertirAprobacion(id, dto.motivo, user.email);
   }
 
   /** Pago real de un gasto ya aprobado — EXCLUSIVO Administrador. Único paso que mueve dinero. */

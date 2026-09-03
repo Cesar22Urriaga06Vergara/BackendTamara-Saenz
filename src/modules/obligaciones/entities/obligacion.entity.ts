@@ -16,7 +16,8 @@ export enum EstadoObligacion {
 /**
  * Obligación de pago vinculada a un contrato: canon mensual (generado automáticamente
  * dentro del horizonte configurado) o cargo tipo NOVEDAD (aprobado manualmente por el Admin).
- * La mora se calcula sobre el saldo pendiente, a partir de `fechaVencimiento` + `diasGraciaMora`.
+ * Cobro neto por capital únicamente — sin costo de mora / interés por retraso (retirado por
+ * decisión de negocio el 2026-09-01).
  */
 @Entity('obligacion')
 export class Obligacion {
@@ -47,17 +48,15 @@ export class Obligacion {
   valorAbonado: number;
 
   /**
-   * Mora "congelada": el mayor valor entre lo ya registrado aquí y la mora recién calculada
-   * sobre el capital pendiente (fórmula de §11.2), actualizada por `ObligacionesService.congelarMora`
-   * justo antes de aplicar cualquier abono de capital de un pago. Nunca disminuye por sí sola.
-   * Existe para que la mora ya devengada pero no cobrada no se pierda cuando el capital se
-   * salda por completo (con capital=0 la fórmula en vivo siempre da 0) — hallazgo RECAUDO-01
-   * de la auditoría: antes la mora se mostraba pero nunca era realmente cobrable.
+   * @deprecated Columna heredada del motor de mora, retirado por decisión de negocio el
+   * 2026-09-01 (ya no hay costo de mora / interés por retraso en el sistema — los cobros son
+   * netos, por canon de arrendamiento). Se conserva ÚNICAMENTE para que
+   * `ObligacionesService.revertirAbonoMora` pueda revertir, con el método correcto, un recibo
+   * histórico cuya `AplicacionPago` haya quedado con `concepto = MORA` de antes de este
+   * retiro. Ningún código nuevo la lee ni la escribe hacia adelante; la columna física
+   * `valorMoraAcumulada` de la migración original quedó huérfana (sin campo aquí) a propósito
+   * — nada necesita leerla para revertir un abono de mora ya cobrado.
    */
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-  valorMoraAcumulada: number;
-
-  /** Mora efectivamente cobrada vía `AplicacionPago` (concepto MORA). Pendiente de cobro = valorMoraAcumulada - valorMoraPagada. */
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   valorMoraPagada: number;
 

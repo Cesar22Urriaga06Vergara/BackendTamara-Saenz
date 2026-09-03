@@ -1,10 +1,19 @@
 import { NovedadesService } from './novedades.service';
 import { Movimiento } from '../movimientos/entities/movimiento.entity';
 import { EstadoNovedad, ImpactoFinanciero, Novedad, ResponsableSugerido } from './entities/novedad.entity';
+import { Obligacion, EstadoObligacion, TipoObligacion } from '../obligaciones/entities/obligacion.entity';
 import { CreateNovedadDto } from './dto/create-novedad.dto';
 import { MedioPago } from '../../common/enums/medio-pago.enum';
 import { Rol } from '../../common/enums/roles.enum';
-import { bootstrapTestApp, limpiarBaseDeDatos, crearInmueble, TestApp } from '../../../test/test-app';
+import {
+  bootstrapTestApp,
+  limpiarBaseDeDatos,
+  crearInmueble,
+  crearCliente,
+  crearContrato,
+  configurarEmpresa,
+  TestApp,
+} from '../../../test/test-app';
 
 /** Valida NOV-01: aprobar un gasto de inmobiliaria ya NO mueve dinero; solo el pago real lo hace. */
 describe('NovedadesService (integración) — NOV-01', () => {
@@ -233,5 +242,100 @@ describe('NovedadesService (integración) — listar con filtro impactoFinancier
     });
     expect(resultado.total).toBe(1);
     expect(resultado.data[0].id).toBe(gastoPendiente.id);
+  });
+});
+
+/** Valida F15: revertir una aprobación financiera mal hecha de una novedad. */
+describe('NovedadesService (integración) — revertirAprobacion (F15)', () => {
+  let testApp: TestApp;
+  let service: NovedadesService;
+
+  beforeAll(async () => {
+    testApp = await bootstrapTestApp();
+    service = testApp.app.get(NovedadesService);
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(async () => {
+    await limpiarBaseDeDatos(testApp.dataSource);
+  });
+
+  async function crearNovedadConContrato() {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 500000 });
+    const novedad = await service.crear(
+      {
+        inmuebleId: inmueble.id,
+        contratoId: contrato.id,
+        descripcion: 'Vidrio roto',
+        fecha: new Date().toISOString().slice(0, 10),
+        responsableSugerido: ResponsableSugerido.ARRENDATARIO,
+      },
+      'recepcion@test.com',
+    );
+    return { contrato, novedad };
+  }
+
+  it('revierte un CARGO_ARRENDATARIO: anula la obligación NOVEDAD y la novedad vuelve a PENDIENTE/EN_SEGUIMIENTO', async () => {
+    const { novedad } = await crearNovedadConContrato();
+    await service.aprobarCargoArrendatario(novedad.id, { monto: 80000, concepto: 'Vidrio' }, 'admin@test.com');
+
+    const revertida = await service.revertirAprobacion(novedad.id, 'monto equivocado', 'admin@test.com');
+
+    expect(revertida.impactoFinanciero).toBe(ImpactoFinanciero.PENDIENTE);
+    expect(revertida.estado).toBe(EstadoNovedad.EN_SEGUIMIENTO);
+    expect(revertida.montoAprobado).toBeNull();
+
+    const obligacion = await testApp.dataSource
+      .getRepository(Obligacion)
+      .findOneOrFail({ where: { novedadOrigenId: novedad.id, tipo: TipoObligacion.NOVEDAD } });
+    expect(obligacion.estado).toBe(EstadoObligacion.ANULADA);
+
+    // Y se puede volver a aprobar con el monto correcto.
+    const reaprobada = await service.aprobarCargoArrendatario(
+      novedad.id,
+      { monto: 120000, concepto: 'Vidrio (correcto)' },
+      'admin@test.com',
+    );
+    expect(reaprobada.impactoFinanciero).toBe(ImpactoFinanciero.CARGO_ARRENDATARIO);
+  });
+
+  it('NO permite revertir un CARGO_ARRENDATARIO cuya obligación ya tiene abonos', async () => {
+    const { novedad } = await crearNovedadConContrato();
+    await service.aprobarCargoArrendatario(novedad.id, { monto: 80000, concepto: 'Vidrio' }, 'admin@test.com');
+
+    const obligacion = await testApp.dataSource
+      .getRepository(Obligacion)
+      .findOneOrFail({ where: { novedadOrigenId: novedad.id } });
+    await testApp.dataSource
+      .getRepository(Obligacion)
+      .update(obligacion.id, { valorAbonado: 10000, estado: EstadoObligacion.PARCIAL });
+
+    await expect(service.revertirAprobacion(novedad.id, 'x', 'admin@test.com')).rejects.toThrow(
+      'ya tiene pagos aplicados',
+    );
+  });
+
+  it('NO permite revertir un GASTO_INMOBILIARIA ya pagado', async () => {
+    const inmueble = await crearInmueble(testApp.dataSource);
+    await configurarEmpresa(testApp.dataSource, {});
+    const novedad = await service.crear(
+      {
+        inmuebleId: inmueble.id,
+        descripcion: 'Gasto',
+        fecha: new Date().toISOString().slice(0, 10),
+        responsableSugerido: ResponsableSugerido.INMOBILIARIA,
+      },
+      'recepcion@test.com',
+    );
+    await service.aprobarGastoInmobiliaria(novedad.id, { monto: 50000, concepto: 'Aseo' }, 'admin@test.com');
+    await service.pagarGastoInmobiliaria(novedad.id, { medioPago: MedioPago.EFECTIVO }, 'admin@test.com');
+
+    await expect(service.revertirAprobacion(novedad.id, 'x', 'admin@test.com')).rejects.toThrow('ya fue pagado');
   });
 });

@@ -1,7 +1,11 @@
 import { ContratosService } from './contratos.service';
 import { Contrato, EstadoContrato } from './entities/contrato.entity';
+import { InmueblesService } from '../inmuebles/inmuebles.service';
 import { Inmueble, EstadoInmueble } from '../inmuebles/entities/inmueble.entity';
 import { Obligacion, EstadoObligacion, TipoObligacion } from '../obligaciones/entities/obligacion.entity';
+import { Movimiento, OrigenMovimiento, TipoMovimiento } from '../movimientos/entities/movimiento.entity';
+import { MedioPago } from '../../common/enums/medio-pago.enum';
+import { Rol } from '../../common/enums/roles.enum';
 import { TerminarContratoDto } from './dto/terminar-contrato.dto';
 import { ReactivarContratoDto } from './dto/reactivar-contrato.dto';
 import { CreateContratoDto } from './dto/create-contrato.dto';
@@ -110,6 +114,44 @@ describe('ContratosService (integración) — CONT-01/CONT-02', () => {
     await expect(service.reactivar(contratoTerminado.id, dtoReactivar('motivo'), 'admin@test.com')).rejects.toThrow(
       'El inmueble ya está ocupado por otro contrato activo; no se puede reactivar.',
     );
+  });
+
+  it('congela el canon del contrato y evita que cambios futuros del inmueble alteren la obligación histórica', async () => {
+    const cliente = await crearCliente(testApp.dataSource);
+    const codeudor = await crearCodeudor(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource, { canonValor: 500000, estado: EstadoInmueble.DISPONIBLE });
+
+    const contratoCreado = await service.crear(
+      {
+        clienteId: cliente.id,
+        codeudorIds: [codeudor.id],
+        inmuebleId: inmueble.id,
+        fechaInicio: '2026-09-01',
+      },
+      'admin@test.com',
+    );
+
+    const contrato = await recargarContrato(contratoCreado.id);
+
+    const obligacionesAntes = await testApp.dataSource.getRepository(Obligacion).find({
+      where: { contrato: { id: contrato.id } },
+      order: { fechaVencimiento: 'ASC' },
+    });
+
+    expect(obligacionesAntes.length).toBeGreaterThan(0);
+    expect(Number(obligacionesAntes[0].valorOriginal)).toBe(500000);
+
+    await testApp.app.get(InmueblesService).actualizar(inmueble.id, { canonValor: 700000 }, Rol.ADMINISTRADOR);
+
+    const contratoRecargado = await recargarContrato(contrato.id);
+    expect(Number(contratoRecargado.canonValor)).toBe(500000);
+
+    const obligacionesDespues = await testApp.dataSource.getRepository(Obligacion).find({
+      where: { contrato: { id: contrato.id } },
+      order: { fechaVencimiento: 'ASC' },
+    });
+    expect(obligacionesDespues.length).toBeGreaterThan(0);
+    expect(Number(obligacionesDespues[0].valorOriginal)).toBe(500000);
   });
 
   it('CONT-02: el historial conserva TODOS los ciclos terminar→reactivar→terminar, sin perder el primero', async () => {
@@ -226,20 +268,80 @@ describe('ContratosService (integración) — CONT-04', () => {
   }
 
   it('sin diaPago explícito, lo deriva del día de fechaInicio', async () => {
-    const contrato = await service.crear(await dtoBase('2026-08-21'));
+    const contrato = await service.crear(await dtoBase('2026-08-21'), 'admin@test.com');
     expect(contrato.diaPago).toBe(21);
   });
 
   it('deriva correctamente el día 1 de un mes (caso límite de zona horaria)', async () => {
-    const contrato = await service.crear(await dtoBase('2026-09-01'));
+    const contrato = await service.crear(await dtoBase('2026-09-01'), 'admin@test.com');
     expect(contrato.diaPago).toBe(1); // si hubiera el bug de MORA-01, esto daría 31 (agosto)
   });
 
   it('con diaPago explícito, respeta el valor enviado en vez de derivarlo', async () => {
     const dto = await dtoBase('2026-08-21');
     dto.diaPago = 10;
-    const contrato = await service.crear(dto);
+    const contrato = await service.crear(dto, 'admin@test.com');
     expect(contrato.diaPago).toBe(10);
+  });
+
+  it('genera el canon del contrato desde fechaInicio hasta el horizonte al crearlo (no queda sin obligaciones)', async () => {
+    const hoy = new Date();
+    // Mes 1 del día ⇒ sin overflow de `setMonth`: contrato que arrancó hace 3 meses.
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
+    const fechaInicio = `${inicioMes.getFullYear()}-${String(inicioMes.getMonth() + 1).padStart(2, '0')}-05`;
+
+    const contrato = await service.crear(await dtoBase(fechaInicio), 'admin@test.com');
+
+    const canones = await testApp.dataSource
+      .getRepository(Obligacion)
+      .find({ where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON }, order: { periodo: 'ASC' } });
+
+    // 3 meses vencidos + mes en curso + 2 de anticipación (horizonte default 3) = 6.
+    expect(canones.length).toBe(6);
+    // Sin huecos: cada periodo consecutivo un mes después del anterior. `periodo`/`fechaVencimiento`
+    // se leen como string "YYYY-MM-DD" (type: 'date'); se comparan como texto, sin `new Date()`.
+    const mesDe = (p: unknown) => String(p).slice(0, 7);
+    for (let i = 1; i < canones.length; i++) {
+      const [ya, ym] = mesDe(canones[i - 1].periodo)
+        .split('-')
+        .map(Number);
+      const [aa, am] = mesDe(canones[i].periodo).split('-').map(Number);
+      expect((aa - ya) * 12 + (am - ym)).toBe(1);
+    }
+    // El primer canon nunca vence antes del inicio del contrato (LB-7).
+    expect(String(canones[0].fechaVencimiento).slice(0, 10) >= fechaInicio).toBe(true);
+  });
+
+  it('B5: al recibir depósito de garantía genera un Movimiento INGRESO origen DEPOSITO con su medio de pago', async () => {
+    const dto = await dtoBase('2026-08-21');
+    dto.depositoGarantia = 800000;
+    dto.medioPagoDeposito = MedioPago.TRANSFERENCIA;
+    dto.referenciaDeposito = 'REF-DEP-001';
+
+    const contrato = await service.crear(dto, 'admin@test.com');
+
+    const ingreso = await testApp.dataSource.getRepository(Movimiento).findOneOrFail({
+      where: { contratoId: contrato.id, origen: OrigenMovimiento.DEPOSITO },
+    });
+    expect(ingreso.tipo).toBe(TipoMovimiento.INGRESO);
+    expect(Number(ingreso.monto)).toBe(800000);
+    expect(ingreso.medioPago).toBe(MedioPago.TRANSFERENCIA);
+    expect(ingreso.referencia).toBe('REF-DEP-001');
+  });
+
+  it('B5: rechaza crear un contrato con depósito de garantía si no se indica el medio de pago', async () => {
+    const dto = await dtoBase('2026-08-21');
+    dto.depositoGarantia = 500000;
+
+    await expect(service.crear(dto, 'admin@test.com')).rejects.toThrow('medio de pago');
+  });
+
+  it('sin depósito de garantía no genera ningún movimiento', async () => {
+    const contrato = await service.crear(await dtoBase('2026-08-21'), 'admin@test.com');
+    const movimientos = await testApp.dataSource
+      .getRepository(Movimiento)
+      .count({ where: { contratoId: contrato.id } });
+    expect(movimientos).toBe(0);
   });
 });
 
