@@ -19,7 +19,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        secret: cfg.get('JWT_ACCESS_SECRET'),
+        secret: cfg.getOrThrow('JWT_ACCESS_SECRET'),
         signOptions: { expiresIn: cfg.get('JWT_ACCESS_EXPIRES_IN', '15m') },
       }),
     }),
