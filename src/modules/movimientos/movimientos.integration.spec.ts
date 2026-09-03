@@ -180,7 +180,7 @@ describe('MovimientosService (integración)', () => {
       expect(repagada.gastoPagado).toBe(true);
     });
 
-    it('DEPOSITO: reversar la devolución deja el contrato como NO liquidado, con el depósito restaurado', async () => {
+    it('DEPOSITO: reversar la devolución deja el contrato como NO liquidado, con el depósito restaurado y los descuentos anulados (no borrados)', async () => {
       const recaudo = testApp.app.get(RecaudoService);
       await configurarEmpresa(testApp.dataSource, {});
       const cliente = await crearCliente(testApp.dataSource);
@@ -209,10 +209,14 @@ describe('MovimientosService (integración)', () => {
       expect(contratoRecargado.depositoLiquidadoEn).toBeNull();
       expect(Number(contratoRecargado.depositoGarantia)).toBe(1000000); // 800.000 devuelto + 200.000 descontado
 
+      // DEP-REV-01: los descuentos NO se borran físicamente — quedan como registro histórico
+      // marcado `anuladoEn` (append-only, igual que Movimiento/ReciboCaja/ArqueoCaja).
       const descuentos = await testApp.dataSource
         .getRepository(DescuentoDeposito)
         .find({ where: { contrato: { id: contrato.id } } });
-      expect(descuentos).toHaveLength(0);
+      expect(descuentos).toHaveLength(1);
+      expect(descuentos[0].anuladoEn).not.toBeNull();
+      expect(descuentos[0].motivoAnulacion).toContain('reversada');
     });
   });
 });

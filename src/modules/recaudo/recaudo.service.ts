@@ -808,6 +808,8 @@ export class RecaudoService {
           .leftJoin('d.contrato', 'contrato')
           .addSelect('contrato.id')
           .where('contrato.id IN (:...contratoIds)', { contratoIds })
+          // Los descuentos anulados por una reversión de liquidación no cuentan (DEP-REV-01).
+          .andWhere('d.anuladoEn IS NULL')
           .getMany()
       : [];
 

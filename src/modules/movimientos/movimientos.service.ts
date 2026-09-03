@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { Movimiento, OrigenMovimiento, TipoMovimiento } from './entities/movimiento.entity';
 import { Novedad } from '../novedades/entities/novedad.entity';
 import { Contrato } from '../contratos/entities/contrato.entity';
@@ -204,7 +204,9 @@ export class MovimientosService {
       if (!contrato || !contrato.depositoLiquidadoEn) return;
 
       const descuentoRepo = manager.getRepository(DescuentoDeposito);
-      const descuentos = await descuentoRepo.find({ where: { contrato: { id: contrato.id } } });
+      const descuentos = await descuentoRepo.find({
+        where: { contrato: { id: contrato.id }, anuladoEn: IsNull() },
+      });
       const totalDescuentos = descuentos.reduce((acc, d) => acc + Number(d.valor), 0);
 
       // El depósito original = lo que se devolvió (monto del movimiento) + lo que se descontó.
@@ -242,7 +244,13 @@ export class MovimientosService {
       }
 
       // Los descuentos de esa liquidación dejan de tener efecto (la liquidación se deshizo).
-      if (descuentos.length) await descuentoRepo.remove(descuentos);
+      // Se marcan como anulados en vez de borrarlos: la reversión es un flujo de corrección
+      // trazable, no un DELETE — mismo patrón append-only que Movimiento/ReciboCaja (DEP-REV-01).
+      if (descuentos.length) {
+        const anuladoEn = new Date();
+        const motivoAnulacion = `Liquidación de depósito reversada: ${original.concepto}`;
+        await descuentoRepo.save(descuentos.map((d) => ({ ...d, anuladoEn, motivoAnulacion })));
+      }
     }
   }
 

@@ -16,8 +16,9 @@ export enum TipoDescuentoDeposito {
  * (§19: "Cada descuento debe conservar concepto/motivo y valor"). Antes de esto, la liquidación
  * solo recibía `valorDescuentos: number` — un total agregado sin explicar en qué se descontó
  * (hallazgo DEP-01 de la auditoría). Es un registro histórico inmutable: la liquidación de
- * depósito no se corrige editando estos registros, sino con el flujo financiero de corrección
- * correspondiente si algo se registró mal.
+ * depósito no se corrige editando ni borrando estos registros, sino marcándolos como anulados
+ * (`anuladoEn`) cuando se revierte la liquidación completa (DEP-REV-01) — el mismo patrón
+ * append-only de `Movimiento`/`ReciboCaja`/`ArqueoCaja`.
  */
 @Entity('descuento_deposito')
 export class DescuentoDeposito {
@@ -42,4 +43,15 @@ export class DescuentoDeposito {
 
   @CreateDateColumn()
   creadoEn: Date;
+
+  /**
+   * Fecha en que se anuló este descuento al revertir la liquidación de depósito que lo generó
+   * (DEP-REV-01). `null` = vigente. No se borra físicamente: la reversión es un flujo de
+   * corrección trazable, no un `DELETE`.
+   */
+  @Column({ type: 'datetime', nullable: true })
+  anuladoEn: Date | null;
+
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  motivoAnulacion: string | null;
 }
