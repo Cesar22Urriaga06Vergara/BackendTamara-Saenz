@@ -10,6 +10,7 @@ import { AplicacionPago } from '../recaudo/entities/aplicacion-pago.entity';
 import { ConsecutivoService } from '../empresa/consecutivo.service';
 import { ObligacionesService } from '../obligaciones/obligaciones.service';
 import { paginar } from '../../common/utils/paginar.util';
+import { finDelDiaLocal } from '../../common/utils/fecha.util';
 import { MedioPago } from '../../common/enums/medio-pago.enum';
 
 export interface RegistrarMovimientoInput {
@@ -259,7 +260,9 @@ export class MovimientosService {
     if (filtro.origen) qb.andWhere('m.origen = :origen', { origen: filtro.origen });
     if (filtro.medioPago) qb.andWhere('m.medioPago = :medioPago', { medioPago: filtro.medioPago });
     if (filtro.desde) qb.andWhere('m.creadoEn >= :desde', { desde: filtro.desde });
-    if (filtro.hasta) qb.andWhere('m.creadoEn <= :hasta', { hasta: filtro.hasta });
+    // `hasta` sin hora ("YYYY-MM-DD") contra `creadoEn` datetime: subir al último instante del
+    // día o se excluye casi todo el propio día pedido (misma clase de bug que AUD-021).
+    if (filtro.hasta) qb.andWhere('m.creadoEn <= :hasta', { hasta: finDelDiaLocal(filtro.hasta) });
     qb.orderBy('m.creadoEn', 'DESC');
     return paginar(qb, filtro.page, filtro.limit);
   }

@@ -19,6 +19,7 @@ import { MovimientosService } from '../movimientos/movimientos.service';
 import { OrigenMovimiento } from '../movimientos/entities/movimiento.entity';
 import { paginar, paginarArray } from '../../common/utils/paginar.util';
 import { redondearMoneda, esCeroMoneda } from '../../common/utils/dinero.util';
+import { finDelDiaLocal } from '../../common/utils/fecha.util';
 
 /**
  * Motor de recaudo: pagos mixtos, aplicación en el orden de negocio Canon → Novedad (§10 de
@@ -387,7 +388,9 @@ export class RecaudoService {
     }
     if (filtro.estado) qb.andWhere('r.estado = :estado', { estado: filtro.estado });
     if (filtro.fechaDesde) qb.andWhere('r.creadoEn >= :desde', { desde: filtro.fechaDesde });
-    if (filtro.fechaHasta) qb.andWhere('r.creadoEn <= :hasta', { hasta: filtro.fechaHasta });
+    // `fechaHasta` sin hora contra `creadoEn` datetime: subir al último instante del día para
+    // no excluir todo lo emitido ese mismo día (misma clase de bug que AUD-021).
+    if (filtro.fechaHasta) qb.andWhere('r.creadoEn <= :hasta', { hasta: finDelDiaLocal(filtro.fechaHasta) });
     if (filtro.medioPago) {
       qb.andWhere('EXISTS (SELECT 1 FROM detalle_pago dp WHERE dp.reciboId = r.id AND dp.medioPago = :medioPago)', {
         medioPago: filtro.medioPago,

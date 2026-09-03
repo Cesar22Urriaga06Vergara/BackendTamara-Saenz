@@ -17,3 +17,17 @@ export function fechaLocalDesdeString(valor: Date | string): Date {
   }
   return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
 }
+
+/**
+ * Último instante (`23:59:59.999`, hora LOCAL del servidor) del día calendario que representa
+ * un string `"YYYY-MM-DD"`. Se usa como límite superior inclusivo al filtrar columnas
+ * `datetime` por un rango de fechas: comparar `columna <= "2026-09-03"` directamente contra un
+ * `datetime` excluye todo lo registrado ese mismo día después de la medianoche (hallazgo
+ * AUD-021, y su no-propagación a `/movimientos` y `/recaudo/recibos` — N1). Construye los
+ * componentes Y-M-D directamente para no pasar por el parseo ISO-UTC de `new Date(string)`.
+ */
+export function finDelDiaLocal(valor: string): Date {
+  const base = fechaLocalDesdeString(valor);
+  base.setHours(23, 59, 59, 999);
+  return base;
+}

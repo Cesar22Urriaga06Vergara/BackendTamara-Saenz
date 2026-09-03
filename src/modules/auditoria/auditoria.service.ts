@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RegistroAuditoria } from './entities/registro-auditoria.entity';
+import { paginar } from '../../common/utils/paginar.util';
+import { finDelDiaLocal } from '../../common/utils/fecha.util';
 
 export interface RegistrarAuditoriaInput {
   modulo: string;
@@ -29,35 +31,19 @@ export class AuditoriaService {
     page?: string;
     limit?: string;
   }) {
-    const page = Number(filtro.page ?? 1);
-    const limit = Number(filtro.limit ?? 20);
-
     const qb = this.repo.createQueryBuilder('a');
     if (filtro.modulo) qb.andWhere('a.modulo = :modulo', { modulo: filtro.modulo });
     if (filtro.usuarioEmail) qb.andWhere('a.usuarioEmail = :email', { email: filtro.usuarioEmail });
     if (filtro.desde) qb.andWhere('a.creadoEn >= :desde', { desde: filtro.desde });
     if (filtro.hasta) {
-      // `hasta` llega como fecha sin hora ("YYYY-MM-DD"); comparar directamente contra una
-      // columna datetime excluía casi todos los registros del propio día límite (AUD-021).
-      //
-      // La corrección original de AUD-021 usaba `new Date(filtro.hasta)` (que ECMA-262
-      // interpreta como medianoche UTC) y luego `.setHours(23,59,59,999)` (que opera en hora
-      // LOCAL): en una zona horaria negativa como Bogotá (UTC-5), la medianoche UTC ya cae en
-      // el día calendario ANTERIOR al convertirse a componentes locales, así que `setHours`
-      // fijaba el límite alrededor de las 04:59 UTC del día correcto — excluyendo en la
-      // práctica casi todo el día que se pedía incluir (mismo mecanismo del hallazgo MORA-01).
-      // Se construyen los componentes Y-M-D directamente en hora local, sin pasar por el
-      // parseo ISO-UTC del constructor `Date`, igual que `ObligacionesService.fechaLocalDesdeColumnaDate`.
-      const [anio, mes, dia] = filtro.hasta.split('-').map(Number);
-      const hastaFinDelDia = new Date(anio, mes - 1, dia, 23, 59, 59, 999);
-      qb.andWhere('a.creadoEn <= :hasta', { hasta: hastaFinDelDia });
+      // `hasta` llega sin hora ("YYYY-MM-DD"); contra una columna datetime hay que subir el
+      // límite al último instante del día o se excluye casi todo el propio día pedido (AUD-021).
+      qb.andWhere('a.creadoEn <= :hasta', { hasta: finDelDiaLocal(filtro.hasta) });
     }
 
-    qb.orderBy('a.creadoEn', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
-
-    const [data, total] = await qb.getManyAndCount();
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    // `paginar` acota `page`/`limit` (no numéricos → valores seguros; `limit` con techo de 100):
+    // este endpoint recibía `page`/`limit` como `@Query()` sueltos sin `ValidationPipe`, así que
+    // `?limit=999999` traía todo y `?limit=abc` producía `.take(NaN)`.
+    return paginar(qb.orderBy('a.creadoEn', 'DESC'), filtro.page, filtro.limit, 20);
   }
 }
