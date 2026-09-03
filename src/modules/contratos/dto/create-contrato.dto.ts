@@ -46,6 +46,4 @@ export class CreateContratoDto {
   @IsOptional() @IsEnum(MedioPago) medioPagoDeposito?: MedioPago;
 
   @IsOptional() @IsString() @MaxLength(100) referenciaDeposito?: string;
-
-  @IsOptional() @IsString() observaciones?: string;
 }
