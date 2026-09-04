@@ -31,10 +31,25 @@ async function bootstrap() {
 
   // Detrás de un reverse-proxy (nginx, LB, Cloudflare), Express necesita saber cuántos saltos
   // de proxy confiar para que `req.ip` sea la IP real del cliente y no la del proxy — clave
-  // para que la traza de auditoría (`ipOrigen`) sirva. Valor por env: número de saltos, o
-  // "false" para deshabilitar (default en desarrollo local, sin proxy).
+  // para que la traza de auditoría (`ipOrigen`) sirva. Valor por env: número de saltos, "true"/
+  // "false", o vacío. Cualquier otro texto (p. ej. un typo) cae a "sin proxy" en vez de
+  // propagarse crudo a Express: `app.set('trust proxy', <string no reconocido>)` intenta
+  // parsearlo como IP/subred y LANZA de forma síncrona en el bootstrap sin try/catch — tumbaría
+  // el backend entero al arrancar. Mismo criterio de "formato desconocido → default seguro" que
+  // parseExpiracionAMs en auth.service.ts.
   const trustProxy = config.get<string>('TRUST_PROXY', 'false');
-  app.set('trust proxy', trustProxy === 'false' ? false : /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+  if (trustProxy === 'false') {
+    app.set('trust proxy', false);
+  } else if (trustProxy === 'true') {
+    app.set('trust proxy', true);
+  } else if (/^\d+$/.test(trustProxy)) {
+    app.set('trust proxy', Number(trustProxy));
+  } else {
+    console.warn(
+      `TRUST_PROXY="${trustProxy}" no es un valor reconocido ("false", "true" o un número de saltos). Se ignora: trust proxy queda deshabilitado.`,
+    );
+    app.set('trust proxy', false);
+  }
 
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
 
