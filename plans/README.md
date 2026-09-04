@@ -17,7 +17,7 @@ fila al terminar. Los planes son auto-contenidos (no asumen contexto de la sesi�
 | 002 | Protección "último Administrador" a prueba de concurrencia | P2 | S | LOW | — | **DONE** (commit `7aef72c`) |
 | 003 | Montos de dinero como `@IsInt` en toda la API | P3 | S | LOW | — | **DONE** (commit `f0e431e`) |
 | 004 | Helmet + `trust proxy` en el bootstrap | P2 | S | LOW | — | **DONE** (commit `8c249e7`) |
-| 005 | Limpieza de documentación del backend | P3 | M | LOW | — | TODO |
+| 005 | Limpieza de documentación del backend | P3 | M | LOW | — | **DONE** (commits `78f761e`..`a4371d7`) |
 | 006 | Duración de sesión de ~1 día (login diario) | P2 | S | LOW | — | **DONE** (commit `dd65558`) |
 
 Valores de estado: TODO · IN PROGRESS · DONE · BLOCKED (con razón en una línea) · REJECTED (con motivo).
