@@ -1,6 +1,6 @@
 # Backend — Inversiones Tamara & Saenz S. En C. (ERP Inmobiliario)
 
-NestJS 11 + TypeORM + MySQL 8 + JWT + Swagger.
+NestJS 11 + TypeORM + MariaDB 10.4 + JWT + Swagger.
 
 ## ✅ Verificado end-to-end (13 de agosto de 2026)
 
@@ -36,7 +36,7 @@ de la transacción).
 
 La migración incluida en `src/database/migrations/` YA fue generada y ejecutada exitosamente
 contra una base de datos real — no es un archivo de ejemplo, es la migración real y funcional
-del esquema completo (16 tablas, todas las foreign keys). **No necesitas correr
+del esquema completo (todas las tablas y foreign keys). **No necesitas correr
 `migration:generate`, solo `migration:run`.**
 
 ## Módulos incluidos en esta entrega (Fase 1 + Motor Financiero)
@@ -85,14 +85,12 @@ notifica).
 ```bash
 npm install
 cp .env.example .env      # y edita tus credenciales de MySQL — respeta las comillas en los valores con '#'
-npm run migration:run     # ejecuta la migración YA GENERADA (16 tablas, no hace falta migration:generate)
+npm run migration:run     # ejecuta la migración YA GENERADA (no hace falta migration:generate)
 npm run seed               # crea Empresa, Consecutivos y usuarios Admin/Recepción
 npm run start:dev
 ```
 
-Si vas a usar MySQL 8 "de verdad" en vez de MariaDB (con el que se probó esto), el mismo
-flujo aplica sin cambios — TypeORM y la migración generada son estándar SQL, compatibles
-con ambos motores.
+El proyecto se prueba y ejecuta contra MariaDB 10.4 (driver mysql2).
 
 Swagger: `http://localhost:3000/api/docs`
 
@@ -107,8 +105,8 @@ sobre RBAC de Inmuebles/Contratos que la contradiga):
 
 > Todo lo **operativo/técnico** es del Recepcionista; todo lo **contable** es del Administrador.
 
-- **Recepcionista puede**: crear Clientes, Codeudores, Inmuebles y Contratos; terminar y
-  suspender Contratos; registrar Novedades y sugerir si el cargo corresponde al Cliente o a la
+- **Recepcionista puede**: crear Clientes, Codeudores, Inmuebles y Contratos; terminar Contratos;
+  registrar Novedades y sugerir si el cargo corresponde al Cliente o a la
   Inmobiliaria (`responsableSugerido`); generar el recibo de reporte de novedad (documento de
   control interno, sin impacto financiero, análogo en trazabilidad al recibo de caja).
 - **Administrador exclusivo**: todo el módulo `recaudo` (registrar pagos, anular recibos,
@@ -116,14 +114,14 @@ sobre RBAC de Inmuebles/Contratos que la contradiga):
   Novedad vía `aprobar-cargo-arrendatario` / `aprobar-gasto-inmobiliaria` — el Administrador
   decide si el cargo se cobra al cliente o lo asume la inmobiliaria, sin importar lo que sugirió
   Recepción al registrarla.
-- **Salvaguarda de saldo pendiente al terminar/suspender un contrato**: la operación NUNCA debe
+- **Salvaguarda de saldo pendiente al terminar un contrato**: la operación NUNCA debe
   hacer que una deuda deje de ser cobrable ni desaparezca de los reportes. Las obligaciones
-  `PENDIENTE`/`PARCIAL` de un contrato terminado o suspendido no se cancelan automáticamente;
+  `PENDIENTE`/`PARCIAL` de un contrato terminado no se cancelan automáticamente;
   siguen visibles y cobrables desde `recaudo` (ficha de recaudo y reporte de cartera) hasta que
   el Administrador las liquide.
 
 **Estado de implementación de esta regla** (detalle y plan de corrección en
-`AUDITORIA_FUNCIONAL_COMPLETA.md`, ítems AUD-002, AUD-007, AUD-035 a AUD-037):
+`ARCHITECTURE_AND_AUDIT.md`, ítems AUD-002, AUD-007, AUD-035 a AUD-037):
 - Crear contrato por Recepcionista: ✅ ya implementado (`POST /contratos`).
 - Crear Cliente/Codeudor por Recepcionista: ✅ ya implementado.
 - Registrar novedades por Recepcionista + aprobación financiera exclusiva Administrador:
@@ -131,14 +129,15 @@ sobre RBAC de Inmuebles/Contratos que la contradiga):
 - Crear/editar Inmueble por Recepcionista: ✅ ya implementado — `POST /inmuebles` y
   `PATCH /inmuebles/:id` aceptan `Rol.ADMINISTRADOR` y `Rol.RECEPCIONISTA`; el frontend ya
   muestra los botones correspondientes a ambos roles (AUD-036).
-- Terminar/suspender/reactivar contrato por Recepcionista: ✅ ya implementado — `PATCH
-  /contratos/:id/terminar`, `/suspender` y `/reactivar` aceptan ambos roles; `ficha-recaudo`
+- Terminar/reactivar contrato: `PATCH /contratos/:id/terminar` acepta ambos roles;
+  `PATCH /contratos/:id/reactivar` es **exclusivo Administrador**. No existe `/suspender`
+  (estado SUSPENDIDO eliminado — migración EliminarSuspendidoYHistorialContrato). `ficha-recaudo`
   permanece exclusiva de Administrador. UI de acciones agregada en `pages/contratos/index.vue`
   (AUD-035).
-- Obligaciones pendientes de un contrato terminado/suspendido siguen cobrables y visibles en el
+- Obligaciones pendientes de un contrato terminado siguen cobrables y visibles en el
   reporte de cartera: ✅ ya cumplido — verificado que `ObligacionesService.todasPendientes()` y
   `DashboardService.metricasFinancieras()` no filtran por `contrato.estado`, y que
-  `terminar()`/`suspender()` no modifican las obligaciones del contrato (AUD-007, confirmado sin
+  `terminar()` no modifica las obligaciones del contrato (AUD-007, confirmado sin
   cambios de código pendientes).
 - Recibo de reporte de novedad, generado por Recepcionista y guardado para control interno:
   ✅ ya implementado — `PdfNovedadService` + `GET /documentos/novedades/:id/pdf`, sin montos ni
@@ -150,8 +149,8 @@ sobre RBAC de Inmuebles/Contratos que la contradiga):
 - Consecutivos (`RECIBO_CAJA`, `EGRESO`, `NOVEDAD`) usan `SELECT ... FOR UPDATE` dentro de una
   transacción (`ConsecutivoService.siguiente()`) para evitar duplicados bajo concurrencia.
 - Sin estado `EN_VENTA` en Inmueble (restricción absoluta del negocio).
-- Pagos mixtos: `POST /recaudo/pagos` acepta varios `detallesPago` (EFECTIVO, TRANSFERENCIA,
-  CONSIGNACION, OTRO) en un solo recibo; el excedente se guarda en `contrato.saldoAFavor`.
+- Pagos mixtos: `POST /recaudo/pagos` acepta varios `detallesPago` (EFECTIVO, TRANSFERENCIA)
+  en un solo recibo; el excedente se guarda en `contrato.saldoAFavor`.
 - Movimientos de caja son inmutables: no existe endpoint `DELETE`; anular un recibo genera
   un movimiento de reverso trazable (`Movimiento.esReverso` + `movimientoOriginalId`).
 - El módulo `recaudo` completo (y por tanto `documentos`, que depende de él) está bloqueado
@@ -162,7 +161,7 @@ sobre RBAC de Inmuebles/Contratos que la contradiga):
 
 ## Fase 3 (2026-08-18) — Frontend, cerrada
 
-Los 8 ítems de la Fase 3 de `AUDITORIA_FUNCIONAL_COMPLETA.md` (AUD-022 a AUD-029) quedaron
+Los 8 ítems de la Fase 3 de `ARCHITECTURE_AND_AUDIT.md` (AUD-022 a AUD-029) quedaron
 resueltos: manejo de errores consistente en las 11 páginas con lecturas/escrituras que fallaban
 en silencio, retry automático tras renovar sesión, RBAC reflejado en Personas, selector de
 contrato por `inmuebleId`, confirmación antes de desactivar un usuario, y las tres capacidades
@@ -226,3 +225,9 @@ pasa de `Canon → Novedad → Mora` a `Canon → Novedad`.
 - **Frontend (coordinación):** desaparecen `valorMoraAcumulada` / `totalMoraVencida` de las
   respuestas de ficha-recaudo, obligaciones, `simularPago` y deudores; `PATCH /empresa` rechaza
   `diasGraciaMora`/`porcentajeMoraMensual`; `POST /recaudo/pagos` rechaza el campo `formato`.
+
+## Limpieza de documentación (2026-09-04)
+
+Corregidas afirmaciones obsoletas en esta bitácora (MySQL 8 → MariaDB; feature "suspender"
+y medios CONSIGNACION/OTRO retirados; refs a AUDITORIA_FUNCIONAL_COMPLETA.md → ARCHITECTURE_AND_AUDIT.md).
+Auditorías previas movidas a `documentacion/backendocu/archivo/`.
