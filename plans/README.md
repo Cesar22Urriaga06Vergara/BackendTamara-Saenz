@@ -18,7 +18,7 @@ fila al terminar. Los planes son auto-contenidos (no asumen contexto de la sesi�
 | 003 | Montos de dinero como `@IsInt` en toda la API | P3 | S | LOW | — | TODO |
 | 004 | Helmet + `trust proxy` en el bootstrap | P2 | S | LOW | — | TODO |
 | 005 | Limpieza de documentación del backend | P3 | M | LOW | — | TODO |
-| 006 | Duración de sesión de ~1 día (login diario) | P2 | S | LOW | — | **DONE** (commit `<pendiente>`) |
+| 006 | Duración de sesión de ~1 día (login diario) | P2 | S | LOW | — | **DONE** (commit `dd65558`) |
 
 Valores de estado: TODO · IN PROGRESS · DONE · BLOCKED (con razón en una línea) · REJECTED (con motivo).
 
