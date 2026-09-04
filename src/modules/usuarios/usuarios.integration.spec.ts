@@ -1,5 +1,6 @@
 import { UsuariosService } from './usuarios.service';
 import { AuthService } from '../auth/auth.service';
+import { Usuario } from './entities/usuario.entity';
 import { Rol } from '../../common/enums/roles.enum';
 import { bootstrapTestApp, limpiarBaseDeDatos, TestApp } from '../../../test/test-app';
 
@@ -94,6 +95,27 @@ describe('UsuariosService (integración)', () => {
 
       const actualizado = await service.actualizar(recepcion.id, { activo: false }, admin.id);
       expect(actualizado.activo).toBe(false);
+    });
+
+    it('dos desactivaciones simultáneas de los 2 últimos Administradores no dejan el sistema sin ninguno (TOCTOU)', async () => {
+      const ejecutor = await service.crear(dtoUsuario({ email: 'ejecutor@tamarasaenz.com', rol: Rol.RECEPCIONISTA }));
+      const adminA = await service.crear(dtoUsuario({ email: 'admin-a@tamarasaenz.com', rol: Rol.ADMINISTRADOR }));
+      const adminB = await service.crear(dtoUsuario({ email: 'admin-b@tamarasaenz.com', rol: Rol.ADMINISTRADOR }));
+
+      const resultados = await Promise.allSettled([
+        service.actualizar(adminA.id, { activo: false }, ejecutor.id),
+        service.actualizar(adminB.id, { activo: false }, ejecutor.id),
+      ]);
+
+      const exitosos = resultados.filter((r) => r.status === 'fulfilled');
+      const fallidos = resultados.filter((r) => r.status === 'rejected');
+      expect(exitosos).toHaveLength(1);
+      expect(fallidos).toHaveLength(1);
+
+      const administradoresActivos = await testApp.dataSource
+        .getRepository(Usuario)
+        .count({ where: { rol: Rol.ADMINISTRADOR, activo: true } });
+      expect(administradoresActivos).toBeGreaterThanOrEqual(1);
     });
   });
 

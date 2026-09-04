@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Usuario } from './entities/usuario.entity';
 import { Rol } from '../../common/enums/roles.enum';
@@ -11,7 +11,10 @@ import { paginar } from '../../common/utils/paginar.util';
 
 @Injectable()
 export class UsuariosService {
-  constructor(@InjectRepository(Usuario) private readonly repo: Repository<Usuario>) {}
+  constructor(
+    @InjectRepository(Usuario) private readonly repo: Repository<Usuario>,
+    private readonly dataSource: DataSource,
+  ) {}
 
   async crear(dto: CreateUsuarioDto): Promise<Usuario> {
     const existe = await this.repo.findOne({ where: { email: dto.email } });
@@ -49,27 +52,43 @@ export class UsuariosService {
    * el sistema quede sin ningún Administrador activo (por accidente, no por diseño).
    */
   async actualizar(id: string, dto: UpdateUsuarioDto, usuarioActualId?: string): Promise<Usuario> {
-    const usuario = await this.obtener(id);
+    return this.dataSource.transaction(async (manager) => {
+      const usuario = await manager
+        .createQueryBuilder(Usuario, 'u')
+        .setLock('pessimistic_write')
+        .where('u.id = :id', { id })
+        .getOne();
+      if (!usuario) throw new NotFoundException('Usuario no encontrado.');
 
-    const vaADesactivarse = dto.activo === false && usuario.activo;
-    const vaAPerderRolAdmin =
-      dto.rol !== undefined && dto.rol !== Rol.ADMINISTRADOR && usuario.rol === Rol.ADMINISTRADOR;
+      const vaADesactivarse = dto.activo === false && usuario.activo;
+      const vaAPerderRolAdmin =
+        dto.rol !== undefined && dto.rol !== Rol.ADMINISTRADOR && usuario.rol === Rol.ADMINISTRADOR;
 
-    if (usuarioActualId && id === usuarioActualId && (vaADesactivarse || vaAPerderRolAdmin)) {
-      throw new ForbiddenException('No puedes desactivarte a ti mismo ni quitarte tu propio rol de Administrador.');
-    }
-
-    if (usuario.rol === Rol.ADMINISTRADOR && (vaADesactivarse || vaAPerderRolAdmin)) {
-      const administradoresActivos = await this.repo.count({ where: { rol: Rol.ADMINISTRADOR, activo: true } });
-      if (administradoresActivos <= 1) {
-        throw new ConflictException(
-          'No es posible desactivar o cambiar el rol del último Administrador activo del sistema.',
-        );
+      if (usuarioActualId && id === usuarioActualId && (vaADesactivarse || vaAPerderRolAdmin)) {
+        throw new ForbiddenException('No puedes desactivarte a ti mismo ni quitarte tu propio rol de Administrador.');
       }
-    }
 
-    Object.assign(usuario, dto);
-    return this.repo.save(usuario);
+      if (usuario.rol === Rol.ADMINISTRADOR && (vaADesactivarse || vaAPerderRolAdmin)) {
+        // Lock pesimista sobre TODAS las filas de admin activo: sin esto, dos requests que
+        // desactivan cada una a un admin distinto de los dos últimos pasan ambas la verificación
+        // "queda > 1" antes de que cualquiera guarde, y el sistema queda sin administradores
+        // (mismo tipo de carrera que CONC-02 en movimientos).
+        const adminsActivos = await manager
+          .createQueryBuilder(Usuario, 'u')
+          .setLock('pessimistic_write')
+          .where('u.rol = :rol', { rol: Rol.ADMINISTRADOR })
+          .andWhere('u.activo = true')
+          .getMany();
+        if (adminsActivos.length <= 1) {
+          throw new ConflictException(
+            'No es posible desactivar o cambiar el rol del último Administrador activo del sistema.',
+          );
+        }
+      }
+
+      Object.assign(usuario, dto);
+      return manager.save(usuario);
+    });
   }
 
   async cambiarPassword(id: string, nuevaPassword: string): Promise<void> {
