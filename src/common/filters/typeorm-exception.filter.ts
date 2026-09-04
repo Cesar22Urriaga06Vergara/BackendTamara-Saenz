@@ -1,4 +1,11 @@
-import { ArgumentsHost, Catch, ConflictException, ExceptionFilter, HttpException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ConflictException,
+  ExceptionFilter,
+  HttpException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { QueryFailedError } from 'typeorm';
 
@@ -28,6 +35,18 @@ export class TypeOrmExceptionFilter implements ExceptionFilter {
         ),
       ER_BAD_NULL_ERROR: () => new HttpException('Falta un valor obligatorio para completar el registro.', 400),
       ER_DATA_TOO_LONG: () => new HttpException('Uno de los valores enviados excede la longitud permitida.', 400),
+      // Errores TRANSITORIOS de concurrencia: el motor abortó/expiró una transacción por
+      // contención de locks (el sistema usa SELECT ... FOR UPDATE extensamente). Reintentar
+      // la misma operación casi siempre funciona — por eso 503 (retryable) y no 400.
+      ER_LOCK_DEADLOCK: () =>
+        new ServiceUnavailableException(
+          'El sistema está procesando otra operación sobre los mismos datos. Vuelve a intentarlo.',
+        ),
+      ER_LOCK_WAIT_TIMEOUT: () =>
+        new ServiceUnavailableException(
+          'La operación tardó demasiado esperando a que se liberaran los datos. Vuelve a intentarlo.',
+        ),
+      ER_QUERY_INTERRUPTED: () => new ServiceUnavailableException('La consulta fue interrumpida. Vuelve a intentarlo.'),
     };
 
     const httpException =
