@@ -69,6 +69,16 @@ describe('AuthService (integración) — login / refresh / logout', () => {
         'Credenciales inválidas.',
       );
     });
+
+    it('el refresh token de un login expira a ~1 día (BE-006: sesión de login diario)', async () => {
+      await crearUsuarioActivo({ email: 'ok@tamarasaenz.com' });
+      await authService.login({ email: 'ok@tamarasaenz.com', password: 'Password#123' });
+
+      const [registro] = await testApp.dataSource.getRepository(RefreshToken).find();
+      const horas = (registro.expiraEn.getTime() - Date.now()) / (60 * 60 * 1000);
+      expect(horas).toBeGreaterThan(23);
+      expect(horas).toBeLessThan(25);
+    });
   });
 
   describe('refrescar', () => {
