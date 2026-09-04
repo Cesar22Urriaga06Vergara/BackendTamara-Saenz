@@ -3,6 +3,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { SanitizarHtmlPipe } from './common/pipes/sanitizar-html.pipe';
@@ -11,6 +12,29 @@ import { TypeOrmExceptionFilter } from './common/filters/typeorm-exception.filte
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
+
+  // Cabeceras de seguridad (nosniff, frameguard, HSTS, referrer-policy, etc.). La CSP se
+  // relaja lo justo para que Swagger UI (solo fuera de producción) siga cargando su bundle.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          'default-src': ["'self'"],
+          'script-src': ["'self'", "'unsafe-inline'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'img-src': ["'self'", 'data:'],
+        },
+      },
+      crossOriginResourcePolicy: { policy: 'cross-origin' }, // el logo en /uploads lo consume el frontend en otro origen
+    }),
+  );
+
+  // Detrás de un reverse-proxy (nginx, LB, Cloudflare), Express necesita saber cuántos saltos
+  // de proxy confiar para que `req.ip` sea la IP real del cliente y no la del proxy — clave
+  // para que la traza de auditoría (`ipOrigen`) sirva. Valor por env: número de saltos, o
+  // "false" para deshabilitar (default en desarrollo local, sin proxy).
+  const trustProxy = config.get<string>('TRUST_PROXY', 'false');
+  app.set('trust proxy', trustProxy === 'false' ? false : /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
 
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
 
