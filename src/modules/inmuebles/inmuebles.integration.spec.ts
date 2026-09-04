@@ -9,6 +9,7 @@ import {
   crearCliente,
   crearInmueble,
   crearContrato,
+  obtenerOCrearPropietarioInmobiliaria,
   TestApp,
 } from '../../../test/test-app';
 
@@ -136,5 +137,19 @@ describe('InmueblesService (integración) — RBAC-01', () => {
     );
 
     expect(Number(actualizado.canonValor)).toBe(600000);
+  });
+
+  it('B3: crea un inmueble con canonValor/depositoValor enteros y los conserva sin decimales', async () => {
+    await obtenerOCrearPropietarioInmobiliaria(testApp.dataSource);
+
+    const creado = await service.crear({
+      direccion: 'Carrera 10 # 20-30',
+      barrio: 'La Castellana',
+      canonValor: 750000,
+      depositoValor: 750000,
+    });
+
+    expect(Number(creado.canonValor)).toBe(750000);
+    expect(Number(creado.depositoValor)).toBe(750000);
   });
 });

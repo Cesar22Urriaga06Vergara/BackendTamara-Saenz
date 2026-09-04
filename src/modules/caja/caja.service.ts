@@ -6,6 +6,7 @@ import { RegistrarArqueoDto } from './dto/registrar-arqueo.dto';
 import { MovimientosService } from '../movimientos/movimientos.service';
 import { EmpresaService } from '../empresa/empresa.service';
 import { paginar, ResultadoPaginado } from '../../common/utils/paginar.util';
+import { redondearMoneda } from '../../common/utils/dinero.util';
 
 export interface SaldoEsperadoCaja {
   saldoInicial: number;
@@ -67,7 +68,7 @@ export class CajaService {
       devolucionesEfectivo,
       saldoEsperado,
       saldoContado: dto.saldoContado,
-      diferencia: Math.round((dto.saldoContado - saldoEsperado) * 100) / 100,
+      diferencia: redondearMoneda(dto.saldoContado - saldoEsperado),
       observaciones: dto.observaciones ?? null,
       registradoPorEmail,
     });

@@ -15,7 +15,7 @@ fila al terminar. Los planes son auto-contenidos (no asumen contexto de la sesi�
 |------|--------|-----------|----------|--------|------------|--------|
 | 001 | Errores de BD transitorios → 503 (no 400) | P2 | S | LOW | — | **DONE** (commit `ecb0433`) |
 | 002 | Protección "último Administrador" a prueba de concurrencia | P2 | S | LOW | — | **DONE** (commit `7aef72c`) |
-| 003 | Montos de dinero como `@IsInt` en toda la API | P3 | S | LOW | — | TODO |
+| 003 | Montos de dinero como `@IsInt` en toda la API | P3 | S | LOW | — | **DONE** (commit `<pendiente>`) |
 | 004 | Helmet + `trust proxy` en el bootstrap | P2 | S | LOW | — | **DONE** (commit `8c249e7`) |
 | 005 | Limpieza de documentación del backend | P3 | M | LOW | — | TODO |
 | 006 | Duración de sesión de ~1 día (login diario) | P2 | S | LOW | — | **DONE** (commit `dd65558`) |

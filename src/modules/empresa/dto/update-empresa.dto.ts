@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class UpdateEmpresaDto {
   @IsOptional() @IsString() nombre?: string;
@@ -13,8 +13,9 @@ export class UpdateEmpresaDto {
   @Max(24)
   horizonteMesesCanon?: number;
 
+  /** COP no maneja centavos (hallazgo B3 de la auditoría contable 2026-09-01). */
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   @Min(0)
   saldoInicialCaja?: number;
 }
