@@ -21,7 +21,7 @@ fila al terminar. Los planes son auto-contenidos (no asumen contexto de la sesi�
 | 006 | Duración de sesión de ~1 día (login diario) | P2 | S | LOW | — | **DONE** (commit `dd65558`) |
 | 007 | UUID del contrato en el `concepto` de Movimientos (ronda 2) | P1 | S | LOW | — | **DONE** (commit `a81ab49`) |
 | 008 | Mejoras visuales en PDF de Recibo de Caja/Novedad (ronda 2, ad-hoc) | P2 | S | LOW | — | **DONE** (commit `0c86a1c`) |
-| 009 | `SanitizarHtmlPipe` corrompía `&`/`<`/`>` en texto plano (ronda 2, ad-hoc) | P1 | S | LOW | — | **DONE** (commit `<pendiente>`) |
+| 009 | `SanitizarHtmlPipe` corrompía `&`/`<`/`>` en texto plano (ronda 2, ad-hoc) | P1 | S | LOW | — | **DONE** (commit `f651ba9`) |
 
 Valores de estado: TODO · IN PROGRESS · DONE · BLOCKED (con razón en una línea) · REJECTED (con motivo).
 
