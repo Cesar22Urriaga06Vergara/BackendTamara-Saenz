@@ -243,6 +243,32 @@ describe('NovedadesService (integración) — listar con filtro impactoFinancier
     expect(resultado.total).toBe(1);
     expect(resultado.data[0].id).toBe(gastoPendiente.id);
   });
+
+  it('listar() incluye contrato.cliente cuando la novedad está ligada a un contrato', async () => {
+    const cliente = await crearCliente(testApp.dataSource, { nombreCompleto: 'Carlos Ruiz' });
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 500000 });
+    await service.crear(
+      {
+        inmuebleId: inmueble.id,
+        contratoId: contrato.id,
+        descripcion: 'Fuga de agua',
+        fecha: new Date().toISOString().slice(0, 10),
+        responsableSugerido: ResponsableSugerido.INMOBILIARIA,
+      },
+      'recepcion@test.com',
+    );
+
+    const resultado = await service.listar({});
+    expect(resultado.data[0].contrato?.cliente?.nombreCompleto).toBe('Carlos Ruiz');
+  });
+
+  it('listar() no revienta con una novedad sin contrato asociado (solo inmueble)', async () => {
+    await crearNovedadPendiente();
+
+    const resultado = await service.listar({});
+    expect(resultado.data[0].contrato).toBeNull();
+  });
 });
 
 /** Valida F15: revertir una aprobación financiera mal hecha de una novedad. */

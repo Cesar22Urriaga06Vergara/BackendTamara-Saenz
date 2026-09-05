@@ -66,7 +66,11 @@ export class NovedadesService {
   }
 
   async listar(filtro: FilterNovedadDto) {
-    const qb = this.repo.createQueryBuilder('n').leftJoinAndSelect('n.inmueble', 'inmueble');
+    const qb = this.repo
+      .createQueryBuilder('n')
+      .leftJoinAndSelect('n.inmueble', 'inmueble')
+      .leftJoinAndSelect('n.contrato', 'contrato')
+      .leftJoinAndSelect('contrato.cliente', 'cliente');
 
     if (filtro.barrio) qb.andWhere('inmueble.barrio = :barrio', { barrio: filtro.barrio });
     if (filtro.estado) qb.andWhere('n.estado = :estado', { estado: filtro.estado });
