@@ -62,8 +62,10 @@ export class PdfNovedadService {
       if (empresa.logoUrl) {
         const rutaFisicaLogo = join(process.cwd(), empresa.logoUrl);
         if (existsSync(rutaFisicaLogo)) {
-          const anchoLogo = 90;
-          const altoLogo = 64;
+          // Mismo tamaño base que PdfReciboService (112x80, +25% respecto al anterior 90x64) —
+          // este documento no tiene variante Media Carta, no hace falta escalar.
+          const anchoLogo = 112;
+          const altoLogo = 80;
           doc.image(rutaFisicaLogo, tamano[0] - margenX - anchoLogo, doc.y, { fit: [anchoLogo, altoLogo] });
           yTrasLogo = doc.y + altoLogo + 10;
         }
@@ -91,8 +93,9 @@ export class PdfNovedadService {
         .font('Helvetica-Bold')
         .text('RECIBO DE REPORTE DE NOVEDAD', { align: 'center' });
       doc
-        .fontSize(11)
-        .font('Helvetica')
+        .fillColor(COLOR_ORO)
+        .fontSize(12)
+        .font('Helvetica-Bold')
         .text(`No. ${novedad.consecutivo ?? '—'}`, { align: 'center' });
       doc.moveDown(0.3);
 
