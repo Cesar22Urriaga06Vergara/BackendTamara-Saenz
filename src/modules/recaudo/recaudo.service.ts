@@ -51,6 +51,7 @@ export class RecaudoService {
       const contrato = await manager
         .createQueryBuilder(Contrato, 'c')
         .setLock('pessimistic_write')
+        .leftJoinAndSelect('c.cliente', 'cliente')
         .where('c.id = :id', { id: dto.contratoId })
         .getOne();
       if (!contrato) throw new NotFoundException('Contrato no encontrado.');
@@ -197,7 +198,7 @@ export class RecaudoService {
         await this.movimientosService.registrarIngreso(
           {
             origen: OrigenMovimiento.RECAUDO,
-            concepto: `Recaudo recibo ${formateado} — contrato ${contrato.id} (${detalle.medioPago})`,
+            concepto: `Recaudo recibo ${formateado} — ${contrato.cliente?.nombreCompleto ?? contrato.id} (${detalle.medioPago})`,
             monto: detalle.monto,
             registradoPorEmail,
             reciboId: guardado.id,
@@ -568,6 +569,7 @@ export class RecaudoService {
       const contrato = await manager
         .createQueryBuilder(Contrato, 'c')
         .setLock('pessimistic_write')
+        .leftJoinAndSelect('c.cliente', 'cliente')
         .where('c.id = :id', { id: contratoId })
         .getOne();
       if (!contrato) throw new NotFoundException('Contrato no encontrado.');
@@ -667,7 +669,8 @@ export class RecaudoService {
         await this.movimientosService.registrarEgreso(
           {
             origen: OrigenMovimiento.DEPOSITO,
-            concepto: `Devolución depósito de garantía — contrato ${contrato.id}. ${dto.observaciones ?? ''}`.trim(),
+            concepto:
+              `Devolución depósito de garantía — ${contrato.cliente?.nombreCompleto ?? contrato.id}. ${dto.observaciones ?? ''}`.trim(),
             monto: valorDevolucion,
             registradoPorEmail,
             contratoId: contrato.id,

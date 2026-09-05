@@ -19,6 +19,7 @@ fila al terminar. Los planes son auto-contenidos (no asumen contexto de la sesi�
 | 004 | Helmet + `trust proxy` en el bootstrap | P2 | S | LOW | — | **DONE** (commit `8c249e7`) |
 | 005 | Limpieza de documentación del backend | P3 | M | LOW | — | **DONE** (commits `78f761e`..`a4371d7`) |
 | 006 | Duración de sesión de ~1 día (login diario) | P2 | S | LOW | — | **DONE** (commit `dd65558`) |
+| 007 | UUID del contrato en el `concepto` de Movimientos (ronda 2) | P1 | S | LOW | — | **DONE** (commit `<pendiente>`) |
 
 Valores de estado: TODO · IN PROGRESS · DONE · BLOCKED (con razón en una línea) · REJECTED (con motivo).
 

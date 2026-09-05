@@ -3,6 +3,7 @@ import { ObligacionesService } from '../obligaciones/obligaciones.service';
 import { Obligacion, TipoObligacion, EstadoObligacion } from '../obligaciones/entities/obligacion.entity';
 import { Movimiento, OrigenMovimiento } from '../movimientos/entities/movimiento.entity';
 import { Contrato, EstadoContrato } from '../contratos/entities/contrato.entity';
+import { Cliente } from '../personas/entities/cliente.entity';
 import { DescuentoDeposito } from './entities/descuento-deposito.entity';
 import { ReciboCaja } from './entities/recibo-caja.entity';
 import { SaldoFavorCredito } from './entities/saldo-favor-credito.entity';
@@ -103,6 +104,29 @@ describe('RecaudoService (integración) — orden de aplicación Canon → Noved
     expect(novedadRecargada.estado).toBe(EstadoObligacion.PARCIAL);
 
     expect(Number(recibo.excedente)).toBe(0);
+  });
+
+  it('el concepto del movimiento de recaudo muestra el nombre del cliente, no su UUID', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource, { nombreCompleto: 'Ana Pérez' });
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
+    await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 400000,
+      diasVencida: 4,
+    });
+
+    const recibo = await recaudo.registrarPago(
+      dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 400000 }]),
+      'admin@test.com',
+    );
+
+    const movimiento = await testApp.dataSource
+      .getRepository(Movimiento)
+      .findOneOrFail({ where: { reciboId: recibo.id, origen: OrigenMovimiento.RECAUDO } });
+    expect(movimiento.concepto).toContain('Ana Pérez');
+    expect(movimiento.concepto).not.toContain(contrato.id);
   });
 
   it('con dinero de sobra, aplica Canon → Novedad y el resto se devuelve de inmediato como cambio (RDN-01)', async () => {
@@ -547,8 +571,8 @@ describe('RecaudoService (integración) — DEP-01', () => {
     await limpiarBaseDeDatos(testApp.dataSource);
   });
 
-  async function crearContratoTerminadoConDeposito(depositoGarantia: number) {
-    const cliente = await crearCliente(testApp.dataSource);
+  async function crearContratoTerminadoConDeposito(depositoGarantia: number, overridesCliente: Partial<Cliente> = {}) {
+    const cliente = await crearCliente(testApp.dataSource, overridesCliente);
     const inmueble = await crearInmueble(testApp.dataSource);
     return crearContrato(testApp.dataSource, cliente, inmueble, {
       estado: EstadoContrato.TERMINADO,
@@ -556,6 +580,22 @@ describe('RecaudoService (integración) — DEP-01', () => {
       depositoGarantia,
     });
   }
+
+  it('el concepto del movimiento de devolución de depósito muestra el nombre del cliente, no su UUID', async () => {
+    const contrato = await crearContratoTerminadoConDeposito(500000, { nombreCompleto: 'Carlos Ruiz' });
+
+    await recaudo.liquidarDeposito(
+      contrato.id,
+      { descuentos: [], medioPago: MedioPago.TRANSFERENCIA, referencia: 'REF-1' },
+      'admin@test.com',
+    );
+
+    const movimiento = await testApp.dataSource
+      .getRepository(Movimiento)
+      .findOneOrFail({ where: { contratoId: contrato.id, origen: OrigenMovimiento.DEPOSITO } });
+    expect(movimiento.concepto).toContain('Carlos Ruiz');
+    expect(movimiento.concepto).not.toContain(contrato.id);
+  });
 
   it('persiste cada descuento con su propio concepto/valor y devuelve el neto por el medio indicado', async () => {
     const contrato = await crearContratoTerminadoConDeposito(1000000);
