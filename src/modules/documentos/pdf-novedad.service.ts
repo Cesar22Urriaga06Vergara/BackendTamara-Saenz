@@ -9,6 +9,7 @@ import { fechaLocalDesdeString } from '../../common/utils/fecha.util';
 const COLOR_TEXTO = '#1A1A1A';
 const COLOR_GRIS = '#4A4D52';
 const COLOR_ORO = '#CFA052';
+const COLOR_ORO_CLARO = '#FBF3E4';
 const COLOR_BORDE = '#D9D9D9';
 const COLOR_DIVISOR = '#E5E7EB';
 
@@ -32,11 +33,19 @@ const ETIQUETA_RESPONSABLE: Record<string, string> = {
   ARRENDATARIO: 'Arrendatario',
 };
 
+/** Mismas 3 etiquetas que `useEstados.ts` (frontend) para el dominio `impactoFinanciero`. */
+const ETIQUETA_IMPACTO: Record<string, string> = {
+  PENDIENTE: 'Pendiente de aprobación financiera',
+  CARGO_ARRENDATARIO: 'Cargo al arrendatario',
+  GASTO_INMOBILIARIA: 'Gasto de la inmobiliaria',
+};
+
 /**
  * Genera el "Recibo de reporte de novedad": documento de control interno para
- * Recepción, SIN impacto financiero (no reemplaza ni anticipa el Recibo de Caja
- * ni la aprobación financiera del Administrador — solo deja constancia de que la
- * novedad fue registrada, para archivo/control interno).
+ * Recepción/Administrador, que declara el impacto financiero (tipo, monto aprobado y estado de
+ * pago) cuando ya existe, además de la descripción — pero no reemplaza ni anticipa el Recibo de
+ * Caja ni constituye por sí mismo la aprobación financiera del Administrador (ver aviso en el
+ * propio documento): solo deja constancia de lo que el sistema ya registró.
  */
 @Injectable()
 export class PdfNovedadService {
@@ -214,6 +223,58 @@ export class PdfNovedadService {
 
       doc.y = yTarjeta + altoTarjeta + 20;
 
+      // ---- Impacto financiero: el costo real declarado explícitamente, no solo la descripción
+      // textual — mismo criterio del Recibo de Caja (que declara cada medio de pago línea por
+      // línea, no solo un total). Se dibuja como líneas sueltas (no una tarjeta de grilla fija
+      // como la de arriba) porque el número de líneas varía según impactoFinanciero/gastoPagado;
+      // una grilla de alto precalculado obligaría a recalcular esa tarjeta ante cada combinación. ----
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR_TEXTO).text('Impacto financiero', margenX, doc.y);
+      doc.moveDown(0.35);
+
+      const lineaDato = (etiqueta: string, valor: string) => {
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9)
+          .fillColor(COLOR_TEXTO)
+          .text(`${etiqueta} `, margenX + 12, doc.y, { continued: true, width: anchoContenido - 12 });
+        doc.font('Helvetica').fillColor(COLOR_GRIS).text(valor);
+        doc.moveDown(0.3);
+      };
+
+      lineaDato('Tipo:', ETIQUETA_IMPACTO[novedad.impactoFinanciero] ?? novedad.impactoFinanciero);
+
+      if (novedad.montoAprobado != null) {
+        const altoCajaMonto = 22;
+        const yCajaMonto = doc.y;
+        doc.roundedRect(margenX, yCajaMonto, anchoContenido, altoCajaMonto, 4).fill(COLOR_ORO_CLARO);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(COLOR_TEXTO)
+          .text('Monto: ', margenX + 12, yCajaMonto + 5, { continued: true, width: anchoContenido - 24 })
+          .text(this.formatoMonedaCO(novedad.montoAprobado), { align: 'right' });
+        doc.y = yCajaMonto + altoCajaMonto + 8;
+      }
+
+      if (novedad.aprobadoPorEmail) {
+        lineaDato('Aprobado por:', novedad.aprobadoPorEmail);
+      }
+
+      if ((novedad.impactoFinanciero as string) === 'GASTO_INMOBILIARIA') {
+        lineaDato('Estado de pago:', novedad.gastoPagado ? 'Pagado' : 'Pendiente de pago');
+        if (novedad.gastoPagado) {
+          const medio = novedad.medioPagoGasto ?? '—';
+          lineaDato(
+            'Medio de pago:',
+            novedad.referenciaPagoGasto ? `${medio} (Ref: ${novedad.referenciaPagoGasto})` : medio,
+          );
+          if (novedad.fechaPagoGasto) lineaDato('Fecha de pago:', this.formatoFechaCO(novedad.fechaPagoGasto));
+          if (novedad.pagadoPorEmail) lineaDato('Pagado por:', novedad.pagadoPorEmail);
+        }
+      }
+
+      doc.moveDown(0.4);
+
       // ---- Descripción / Observaciones: bloque con barra de acento, igual criterio visual del
       // divisor dorado del encabezado (gris para observaciones, para diferenciarlo del cuerpo). ----
       const bloqueTexto = (titulo: string, texto: string, colorAcento: string) => {
@@ -267,6 +328,13 @@ export class PdfNovedadService {
   private formatoFechaCO(fecha: Date | string): string {
     return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(
       fechaLocalDesdeString(fecha),
+    );
+  }
+
+  /** Mismo formato que `PdfReciboService.formatoMonedaCO` — un solo criterio visual de moneda. */
+  private formatoMonedaCO(valor: number): string {
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(
+      Number(valor),
     );
   }
 }
