@@ -70,7 +70,7 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3001'),
+    origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3011'),
     credentials: true,
   });
 
@@ -92,7 +92,7 @@ async function bootstrap() {
     swaggerHabilitado = true;
   }
 
-  const port = config.get<number>('PORT', 3000);
+  const port = config.get<number>('PORT', 3010);
   await app.listen(port);
 
   console.log(`🚀 API Tamara & Saenz corriendo en http://localhost:${port}/${prefix}`);

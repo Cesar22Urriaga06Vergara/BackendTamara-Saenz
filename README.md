@@ -92,7 +92,7 @@ npm run start:dev
 
 El proyecto se prueba y ejecuta contra MariaDB 10.4 (driver mysql2).
 
-Swagger: `http://localhost:3000/api/docs`
+Swagger: `http://localhost:3010/api/docs`
 
 ## Usuarios de prueba (definidos en `.env`)
 - Admin: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
