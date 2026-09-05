@@ -23,7 +23,7 @@ fila al terminar. Los planes son auto-contenidos (no asumen contexto de la sesi�
 | 008 | Mejoras visuales en PDF de Recibo de Caja/Novedad (ronda 2, ad-hoc) | P2 | S | LOW | — | **DONE** (commit `0c86a1c`) |
 | 009 | `SanitizarHtmlPipe` corrompía `&`/`<`/`>` en texto plano (ronda 2, ad-hoc) | P1 | S | LOW | — | **DONE** (commit `f651ba9`) |
 | 010 | Columna Cliente ausente en el listado de Novedades (ronda 2) | P2 | S | LOW | — | **DONE** (commit `6613fc8`) |
-| 011 | El Recibo de Novedad no declaraba el costo/impacto financiero (ronda 2, ad-hoc) | P2 | S | LOW | — | **DONE** (commit pendiente) |
+| 011 | El Recibo de Novedad no declaraba el costo/impacto financiero (ronda 2, ad-hoc) | P2 | S | LOW | — | **DONE** (commit `e32641c`) |
 
 Valores de estado: TODO · IN PROGRESS · DONE · BLOCKED (con razón en una línea) · REJECTED (con motivo).
 
