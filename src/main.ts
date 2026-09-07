@@ -8,13 +8,17 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import { SanitizarHtmlPipe } from './common/pipes/sanitizar-html.pipe';
 import { TypeOrmExceptionFilter } from './common/filters/typeorm-exception.filter';
+import { validarSecretoJwt } from './common/utils/validar-secreto-jwt.util';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
 
+  // Aborta el arranque si el secreto que firma los access tokens es débil o de ejemplo (S-1).
+  validarSecretoJwt(config.get<string>('JWT_ACCESS_SECRET'));
+
   // Cabeceras de seguridad (nosniff, frameguard, HSTS, referrer-policy, etc.). La CSP se
-  // relaja lo justo para que Swagger UI (solo fuera de producción) siga cargando su bundle.
+  // relaja lo justo para que Swagger UI (solo con SWAGGER_ENABLED=true) siga cargando su bundle.
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -76,11 +80,11 @@ async function bootstrap() {
 
   // Swagger expone el esquema completo de la API (todas las rutas, DTOs y formas de
   // respuesta) sin pasar por JwtAuthGuard/RolesGuard, que solo protegen rutas enrutadas por
-  // Nest — la UI de Swagger se sirve fuera de ese pipeline. Solo se habilita fuera de
-  // producción para no exponer el mapa completo del API a cualquiera con acceso de red.
-  const esProduccion = config.get<string>('NODE_ENV') === 'production';
-  let swaggerHabilitado = false;
-  if (!esProduccion) {
+  // Nest — la UI de Swagger se sirve fuera de ese pipeline. Antes se encendía salvo cuando
+  // NODE_ENV === 'production'; pero si NODE_ENV no se fija (o queda en 'development' en el .env
+  // de producción, hallazgo S-7) quedaba expuesto por accidente. Ahora exige opt-in explícito.
+  const swaggerHabilitado = config.get<string>('SWAGGER_ENABLED') === 'true';
+  if (swaggerHabilitado) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('ERP Inmobiliario - Inversiones Tamara & Saenz S. En C.')
       .setDescription('API de control de recaudo, contratos, inmuebles y novedades operativas.')
@@ -89,7 +93,6 @@ async function bootstrap() {
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup(`${prefix}/docs`, app, document);
-    swaggerHabilitado = true;
   }
 
   const port = config.get<number>('PORT', 3010);

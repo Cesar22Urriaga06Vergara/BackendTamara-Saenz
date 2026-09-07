@@ -51,7 +51,7 @@ seguridad/config, esfuerzo S–M, riesgo LOW–MED, **sin decisiones de negocio 
 | Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |
 |------|--------|-----------|----------|--------|------------|--------|
 | 012 | **PASO 0** — Merge de las ramas de corrección a `main` + verificación baseline (cross-repo) | P0 | S | MED | — | **DONE** (merge BE `b31ea14`, FE `61505a8`) |
-| 013 | Endurecimiento de secretos JWT, contraseñas semilla y modo de arranque (S-1, S-2, S-7) | P1 | S | LOW (cód.) / MED (rotación) | 012 | **TODO** |
+| 013 | Endurecimiento de secretos JWT, contraseñas semilla y modo de arranque (S-1, S-2, S-7) | P1 | S | LOW (cód.) / MED (rotación) | 012 | **DONE (código)** — rotación operativa PENDIENTE DEL DUEÑO |
 | 014 | Remediación de dependencias vulnerables del backend — `npm audit`, `bcrypt`→`bcryptjs` (S-3) | P1 | S–M | LOW–MED | 012 | **TODO** |
 
 ### Ejecución de 012 (2026-09-07)
@@ -86,6 +86,43 @@ escaneadas) · **S-7** `NODE_ENV=development` → Swagger expuesto.
 
 Emparejamiento con el frontend (rama coordinada): plan **012** cubre el merge de **ambos** repos;
 plan BE-**014** empareja con FE-**014** (misma higiene de dependencias, desplegar juntos).
+
+### Ejecución de 013 (2026-09-07, rama `hardening-secretos-arranque`)
+
+**Código (S-1, S-2, S-7):**
+- `src/common/utils/validar-secreto-jwt.util.ts` (+ spec, 6 casos) — guardia de arranque:
+  `main.ts` aborta si `JWT_ACCESS_SECRET` < 32 chars o contiene un marcador de ejemplo
+  (`change_this`/`REEMPLAZAR`/`example`/…). **Es un piso, no un chequeo de entropía**: un secreto
+  largo pero predecible (p. ej. el actual `TAMARA_SAENZ_…_2026`, 41 chars) **pasa** la guardia —
+  la rotación a un valor aleatorio sigue siendo tarea operativa.
+- `main.ts` — Swagger pasa de "encendido salvo `NODE_ENV=production`" a **opt-in explícito
+  `SWAGGER_ENABLED=true`** (S-7: el `.env` real tiene `NODE_ENV=development`).
+- `seed.ts` — sin fallbacks `?? 'Admin#2026'` / `?? 'Recepcion#2026'`; ahora exige
+  `SEED_*_PASSWORD` (≥ 8 chars) o falla.
+- `.env.example` — `NODE_ENV=production` + `SWAGGER_ENABLED=false` por defecto; `JWT_ACCESS_SECRET`
+  placeholder inequívoco; `SEED_*_PASSWORD` vacías; `JWT_REFRESH_SECRET` eliminado (config muerta,
+  nada lo lee); cabecera DB "MySQL 8" → "MariaDB 10.4".
+- `.env.test` — `JWT_ACCESS_SECRET` pasa a 64 hex (para que la guardia quede activa también en
+  test, opción 2 del plan); `JWT_REFRESH_SECRET` eliminado.
+- `README.md` — generación de secretos, `SWAGGER_ENABLED`, sección "Rotación de secretos".
+- **Paso 6 (validationSchema de ConfigModule) — omitido** por el propio plan ("sáltalo si añade
+  fricción/deps"; `joi` no está y `JWT_ACCESS_SECRET` ya tiene guardia dedicada).
+
+Verificado: lint + build + `npm test` 24 suites / **185 tests** verde.
+
+**PENDIENTE DEL DUEÑO — rotación operativa (fuera del diff, en el `.env` real + BD real):**
+1. `JWT_ACCESS_SECRET` → valor aleatorio de ≥ 32 chars
+   (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`). **Invalida todas
+   las sesiones activas** — coordinar ventana de re-login.
+2. `NODE_ENV=production`; quitar `SWAGGER_ENABLED` o dejarlo en `false`.
+3. Eliminar `JWT_REFRESH_SECRET` del `.env` real (no lo usa nada).
+4. Cambiar las contraseñas de `admin@` y `recepcion@` desde `/administracion` (o
+   `PATCH /usuarios/:id/password`) si alguna vez se sembraron con `Admin#2026` / `Recepcion#2026`.
+5. **Ojo**: con el `.env` real en `NODE_ENV=development`, tras desplegar este cambio el backend
+   **sigue arrancando** (el secreto actual tiene 41 chars y pasa la guardia), pero Swagger deja de
+   servirse en `/api/v1/docs` salvo que se defina `SWAGGER_ENABLED=true`.
+
+**Seguimiento inmediato (S-8, plan aparte):** bajar `JWT_ACCESS_EXPIRES_IN` de `8h` a `15m`.
 
 ### Notas de dependencia (ronda 3)
 

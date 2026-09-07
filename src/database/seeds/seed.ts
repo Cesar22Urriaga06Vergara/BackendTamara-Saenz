@@ -7,6 +7,20 @@ import { Usuario } from '../../modules/usuarios/entities/usuario.entity';
 import { Rol } from '../../common/enums/roles.enum';
 
 /**
+ * Exige que la contraseña semilla venga por variable de entorno (>= 8 caracteres). Antes había
+ * un fallback hardcodeado (`'Admin#2026'`) que además estaba publicado en `.env.example`
+ * commiteado (hallazgo S-2): si el despliegue real no la definía, la cuenta de Administrador
+ * quedaba con una contraseña que está en el repositorio.
+ */
+function exigirPasswordSemilla(variable: 'SEED_ADMIN_PASSWORD' | 'SEED_RECEPCION_PASSWORD'): string {
+  const valor = process.env[variable];
+  if (!valor || valor.length < 8) {
+    throw new Error(`${variable} debe estar definida (>= 8 caracteres) para sembrar el usuario correspondiente.`);
+  }
+  return valor;
+}
+
+/**
  * Script de Seed — puebla:
  *  - Empresa (Inversiones Tamara & Saenz S. En C.) con parámetros globales.
  *  - Consecutivos atómicos iniciales (RECIBO_CAJA, EGRESO, NOVEDAD).
@@ -56,7 +70,7 @@ async function seed() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@tamarasaenz.com';
   const adminExiste = await usuarioRepo.findOne({ where: { email: adminEmail } });
   if (!adminExiste) {
-    const passwordHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? 'Admin#2026', 10);
+    const passwordHash = await bcrypt.hash(exigirPasswordSemilla('SEED_ADMIN_PASSWORD'), 10);
     await usuarioRepo.save(
       usuarioRepo.create({
         nombreCompleto: 'Administrador General',
@@ -72,7 +86,7 @@ async function seed() {
   const recepcionEmail = process.env.SEED_RECEPCION_EMAIL ?? 'recepcion@tamarasaenz.com';
   const recepcionExiste = await usuarioRepo.findOne({ where: { email: recepcionEmail } });
   if (!recepcionExiste) {
-    const passwordHash = await bcrypt.hash(process.env.SEED_RECEPCION_PASSWORD ?? 'Recepcion#2026', 10);
+    const passwordHash = await bcrypt.hash(exigirPasswordSemilla('SEED_RECEPCION_PASSWORD'), 10);
     await usuarioRepo.save(
       usuarioRepo.create({
         nombreCompleto: 'Recepción Principal',
