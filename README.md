@@ -84,19 +84,41 @@ notifica).
 
 ```bash
 npm install
-cp .env.example .env      # y edita tus credenciales de MySQL — respeta las comillas en los valores con '#'
+cp .env.example .env       # respeta las comillas en los valores con '#'
+```
+
+Genera el secreto JWT (**no uses el de ejemplo**) y pégalo en `JWT_ACCESS_SECRET`:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Define `SEED_ADMIN_PASSWORD` y `SEED_RECEPCION_PASSWORD` con contraseñas fuertes propias
+(el seed falla si faltan). Luego:
+
+```bash
 npm run migration:run     # ejecuta la migración YA GENERADA (no hace falta migration:generate)
 npm run seed               # crea Empresa, Consecutivos y usuarios Admin/Recepción
 npm run start:dev
 ```
 
-El proyecto se prueba y ejecuta contra MariaDB 10.4 (driver mysql2).
+El proyecto se prueba y ejecuta contra MariaDB 10.4 (driver mysql2). El backend **no arranca**
+si `JWT_ACCESS_SECRET` es corto (<32) o un valor de ejemplo.
 
-Swagger: `http://localhost:3010/api/docs`
+Swagger (solo con `SWAGGER_ENABLED=true`): `http://localhost:3010/api/v1/docs`
 
 ## Usuarios de prueba (definidos en `.env`)
 - Admin: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
 - Recepción: `SEED_RECEPCION_EMAIL` / `SEED_RECEPCION_PASSWORD`
+
+## Rotación de secretos
+
+- **`JWT_ACCESS_SECRET`**: cambiarlo invalida **todas las sesiones activas** — todos los usuarios
+  deben volver a hacer login. Coordina una ventana antes de rotarlo en producción.
+- **Contraseñas de usuarios** (`admin@`, `recepcion@`): se cambian desde `/administracion`
+  (o `PATCH /usuarios/:id/password`), **nunca** editando el seed o el `.env` (el seed solo crea
+  el usuario si no existe; no actualiza contraseñas).
+- El `.env` real de producción debe tener `NODE_ENV=production` y `SWAGGER_ENABLED` ausente o `false`.
 
 ## Separación de responsabilidades: Recepcionista (operativo) vs Administrador (contable)
 
