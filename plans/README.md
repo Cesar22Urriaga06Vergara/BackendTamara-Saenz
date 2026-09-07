@@ -69,12 +69,10 @@ corregidos antes del merge:
 3. **Lockfile del frontend desincronizado** (`Missing: commander@10.0.1`): `npm install` para
    re-sincronizar (FE commit `4a57af0`).
 
-**Paso 5 (migración BD real) — PENDIENTE DEL DUEÑO.** La migración
-`1786930000000-AnulacionDescuentoDeposito` (heredada de ronda 1, DEP-REV-01) debe aplicarse a
-`tamara_saenz_db` real. Con el `.env` apuntando a la BD real, verificar con
-`npx typeorm-ts-node-commonjs migration:show -d src/database/data-source.ts` y, si aparece
-pendiente, aplicarla con `npm run migration:run`. Sin ella, cualquier consulta a
-`DescuentoDeposito` falla (pantalla `/depositos`, concepto en `/movimientos`).
+**Paso 5 (migración BD real) — HECHO.** `migration:show` sobre `tamara_saenz_db` real
+(2026-09-07) confirma las 25 migraciones aplicadas, incluida
+`1786930000000-AnulacionDescuentoDeposito` (DEP-REV-01); `migration:run` → "No migrations are
+pending".
 
 **Paso 7 (CI del frontend) — HECHO** (`.github/workflows/ci.yml`, FE commits `c39f065`/`9af3e09`/
 `72c1811`). Notas: usa Node 24 (npm 11) porque el lockfile no resuelve con npm 10; incluye
