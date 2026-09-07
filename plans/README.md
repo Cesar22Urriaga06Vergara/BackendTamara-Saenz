@@ -122,7 +122,10 @@ Verificado: lint + build + `npm test` 24 suites / **185 tests** verde.
    **sigue arrancando** (el secreto actual tiene 41 chars y pasa la guardia), pero Swagger deja de
    servirse en `/api/v1/docs` salvo que se defina `SWAGGER_ENABLED=true`.
 
-**Seguimiento inmediato (S-8, plan aparte):** bajar `JWT_ACCESS_EXPIRES_IN` de `8h` a `15m`.
+**S-8 — HECHO (2026-09-07).** El código ya defaulteaba a `15m` (`auth.module.ts:23`,
+`auth.service.ts:64`); solo faltaba `.env.test` (estaba en `8h` → `15m`) y documentarlo en el
+README ("Rotación de secretos"). El `.env` real de producción debe fijar `JWT_ACCESS_EXPIRES_IN=15m`
+(tarea operativa del dueño, junto con la rotación de BE-013).
 
 ### Notas de dependencia (ronda 3)
 
@@ -143,7 +146,7 @@ auditoría completo para evidencia:
 | **S-6** `useApiFetch` reintenta POSTs no idempotentes → doble cobro | MED-HIGH | Es del **frontend** — plan FE-015 (misma tanda). |
 | **S-5** `pages/login.vue` filtra credenciales por GET pre-hidratación | MED | Es del **frontend** — plan FE-016 (misma tanda). |
 | **A-5** `exceljs`/`file-saver` muertos en el FE | S | Frontend — plan FE-014. |
-| **S-8** Access token de 8 h, no revocable | LOW-MED | Bajar `JWT_ACCESS_EXPIRES_IN` a 15-30 min. Muy relacionado con 013; se hará justo después (mencionado en las Notas de mantenimiento de 013). |
+| ~~**S-8** Access token de 8 h~~ | LOW-MED | **HECHO 2026-09-07** — `15m` (ver "Ejecución de 013"). Sigue "no revocable"; la revocación real de access tokens (lista negra / tokens de vida ultracorta + refresh) es otro plan si se pide. |
 | **S-10** Refresh token sin detección de reuso ni limpieza de filas revocadas | LOW | Plan propio (M). |
 | **S-11** CI del FE inexistente; `npm audit` no está en CI | MED | Parcialmente en 012 (Paso 7 opcional, CI mínimo FE) y en 014 (Paso 4, `npm audit` en CI BE). El resto, plan propio. |
 | **S-12** `AGENTS.md` + docs de negocio fuera de git (`.gitignore` `**/*.md` demasiado amplio) | LOW-MED | S, sin riesgo; se puede plegar en cualquier plan que toque `.gitignore` o hacer uno pequeño. |
