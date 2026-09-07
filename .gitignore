@@ -9,9 +9,13 @@ uploads/
 Claude outputs/
 
 # Variables de entorno
+# Los secretos reales viven en `.env` (ignorado). `.env.test` y `.env.example`
+# solo contienen valores ficticios y SÍ se versionan: el CI
+# (.github/workflows/ci.yml) y `test/jest.setup.ts` cargan `.env.test`.
 .env
-.env.test
 .env.*
+!.env.test
+!.env.example
 
 # ==========================================================
 # REGLAS DE PRECISIÓN PARA IA & AGENT SKILLS (BACKEND)
