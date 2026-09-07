@@ -8,6 +8,11 @@ build/
 uploads/
 Claude outputs/
 
+# Volcados de base de datos (pueden traer datos reales / hostnames de producción; nunca versionar).
+# El esquema real es src/database/migrations/ + el ERD en documentacion/.
+*.sql
+*.dump
+
 # Variables de entorno
 # Los secretos reales viven en `.env` (ignorado). `.env.test` y `.env.example`
 # solo contienen valores ficticios y SÍ se versionan: el CI

@@ -119,6 +119,9 @@ Swagger (solo con `SWAGGER_ENABLED=true`): `http://localhost:3010/api/v1/docs`
   (o `PATCH /usuarios/:id/password`), **nunca** editando el seed o el `.env` (el seed solo crea
   el usuario si no existe; no actualiza contraseñas).
 - El `.env` real de producción debe tener `NODE_ENV=production` y `SWAGGER_ENABLED` ausente o `false`.
+- **`JWT_ACCESS_EXPIRES_IN`**: usar `15m` (default del código). Con la sesión deslizante de 1 día
+  (`JWT_REFRESH_EXPIRES_IN=1d`) y la resiliencia de sesión del frontend, un access token corto no
+  molesta al usuario y reduce a minutos la ventana de un token filtrado.
 
 ## Separación de responsabilidades: Recepcionista (operativo) vs Administrador (contable)
 
