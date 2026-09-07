@@ -34,6 +34,9 @@
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/../test/jest.setup.ts"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/../test/jest.setup-after-env.ts"
     ]
   },
   "dependencies": {
