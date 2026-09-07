@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { Usuario } from './entities/usuario.entity';
 import { Rol } from '../../common/enums/roles.enum';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';

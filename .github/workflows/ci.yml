@@ -36,6 +36,11 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # Falla el CI si aparece una vulnerabilidad alta o crítica nueva. Nivel "high"
+      # (no "moderate") para no bloquear por ruido de bajo impacto. Ver plan BE-014.
+      - name: Auditoría de dependencias
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npm run lint
 
