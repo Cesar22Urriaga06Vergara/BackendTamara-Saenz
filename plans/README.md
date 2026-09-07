@@ -50,9 +50,37 @@ seguridad/config, esfuerzo S–M, riesgo LOW–MED, **sin decisiones de negocio 
 
 | Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |
 |------|--------|-----------|----------|--------|------------|--------|
-| 012 | **PASO 0** — Merge de las ramas de corrección a `main` + verificación baseline (cross-repo) | P0 | S | MED | — | **TODO** |
+| 012 | **PASO 0** — Merge de las ramas de corrección a `main` + verificación baseline (cross-repo) | P0 | S | MED | — | **DONE** (merge BE `b31ea14`, FE `61505a8`) |
 | 013 | Endurecimiento de secretos JWT, contraseñas semilla y modo de arranque (S-1, S-2, S-7) | P1 | S | LOW (cód.) / MED (rotación) | 012 | **TODO** |
 | 014 | Remediación de dependencias vulnerables del backend — `npm audit`, `bcrypt`→`bcryptjs` (S-3) | P1 | S–M | LOW–MED | 012 | **TODO** |
+
+### Ejecución de 012 (2026-09-07)
+
+La verificación baseline destapó tres bloqueos **preexistentes** (ninguno regresión de rondas 1-3),
+corregidos antes del merge:
+
+1. **`npm test` flaky en local** (distinta suite cada corrida, verde en aislamiento): el bootstrap
+   de integración pesado supera el timeout de 5 s de Jest bajo carga. Fix: `jest.setTimeout(30000)`
+   vía `test/jest.setup-after-env.ts` (commit `b256d9f`). Verificado 3× verde.
+2. **CI de backend roto al 100% desde su creación**: `.gitignore` ignoraba `.env.test`, así que en
+   CI se inyectaban 0 variables y las 14 suites reventaban con
+   `Configuration key "JWT_ACCESS_SECRET" does not exist`. Fix: versionar `.env.test` (valores
+   ficticios; commit `0482a17`). **Primer CI verde del repo: run `34076437509` sobre el merge.**
+3. **Lockfile del frontend desincronizado** (`Missing: commander@10.0.1`): `npm install` para
+   re-sincronizar (FE commit `4a57af0`).
+
+**Paso 5 (migración BD real) — PENDIENTE DEL DUEÑO.** La migración
+`1786930000000-AnulacionDescuentoDeposito` (heredada de ronda 1, DEP-REV-01) debe aplicarse a
+`tamara_saenz_db` real. Con el `.env` apuntando a la BD real, verificar con
+`npx typeorm-ts-node-commonjs migration:show -d src/database/data-source.ts` y, si aparece
+pendiente, aplicarla con `npm run migration:run`. Sin ella, cualquier consulta a
+`DescuentoDeposito` falla (pantalla `/depositos`, concepto en `/movimientos`).
+
+**Paso 7 (CI del frontend) — HECHO** (`.github/workflows/ci.yml`, FE commits `c39f065`/`9af3e09`/
+`72c1811`). Notas: usa Node 24 (npm 11) porque el lockfile no resuelve con npm 10; incluye
+`npx nuxt prepare` antes de lint/typecheck. El árbol de deps del FE tiene drift real
+(vue-router pide `pinia ^3||^4`, el proyecto fija `^2`) — remediación completa en **FE-014**.
+Primer CI verde del frontend: run `34077294907`.
 
 Hallazgos cubiertos: **S-1** secretos JWT débiles · **S-2** contraseñas semilla predecibles y
 publicadas en `.env.example` · **S-3** 6 vulnerabilidades de deps (1 crítica `tar`, nunca
