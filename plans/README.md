@@ -52,7 +52,7 @@ seguridad/config, esfuerzo S–M, riesgo LOW–MED, **sin decisiones de negocio 
 |------|--------|-----------|----------|--------|------------|--------|
 | 012 | **PASO 0** — Merge de las ramas de corrección a `main` + verificación baseline (cross-repo) | P0 | S | MED | — | **DONE** (merge BE `b31ea14`, FE `61505a8`) |
 | 013 | Endurecimiento de secretos JWT, contraseñas semilla y modo de arranque (S-1, S-2, S-7) | P1 | S | LOW (cód.) / MED (rotación) | 012 | **DONE (código)** — rotación operativa PENDIENTE DEL DUEÑO |
-| 014 | Remediación de dependencias vulnerables del backend — `npm audit`, `bcrypt`→`bcryptjs` (S-3) | P1 | S–M | LOW–MED | 012 | **TODO** |
+| 014 | Remediación de dependencias vulnerables del backend — `npm audit`, `bcrypt`→`bcryptjs` (S-3) | P1 | S–M | LOW–MED | 012 | **DONE** — `npm audit` → **0 vulnerabilidades** |
 
 ### Ejecución de 012 (2026-09-07)
 
@@ -126,6 +126,30 @@ Verificado: lint + build + `npm test` 24 suites / **185 tests** verde.
 `auth.service.ts:64`); solo faltaba `.env.test` (estaba en `8h` → `15m`) y documentarlo en el
 README ("Rotación de secretos"). El `.env` real de producción debe fijar `JWT_ACCESS_EXPIRES_IN=15m`
 (tarea operativa del dueño, junto con la rotación de BE-013).
+
+### Ejecución de 014 (2026-09-07, rama `remediacion-deps-be14`)
+
+Baseline: 6 vulnerabilidades (1 crítica `tar`, 2 altas, 3 moderadas). **Resultado: `npm audit` → 0.**
+
+- **`bcrypt` → `bcryptjs`** (Paso 2): elimina el binario nativo y con él `@mapbox/node-pre-gyp` +
+  `tar` (la CVE crítica y la alta). `bcryptjs@3` trae sus propios tipos → `@types/bcrypt` eliminado.
+  3 imports cambiados (`auth.service.ts`, `usuarios.service.ts`, `seed.ts`). Nuevo spec
+  `bcryptjs-compat.spec.ts`: los hashes `$2a$`/`$2b$` ya guardados siguen validando — **sin rehash**.
+- **`uuid` directo eliminado** (Paso 3): era dependencia muerta (`grep uuid src/` → 0; el único
+  UUID del código es `randomUUID` de `node:crypto`).
+- **`overrides` en vez de `npm audit fix`** (Pasos 1 y 3): `npm audit fix` insistía en **degradar
+  `exceljs` 4.x → 3.x** (STOP del plan) aun sin `--force`. En su lugar: `overrides` fuerza
+  `qs ^6.16.0` (transitiva de express), `fast-uri ^3.1.7` (transitiva devDep de `@nestjs/cli`) y
+  `exceljs > uuid ^11.1.1`. `exceljs` se queda en `^4.4.0`.
+  - El `uuid` de `exceljs` solo se usa como `v4()` sin `buf` (`cf-rule-ext-xform.js`), así que la
+    CVE (bounds check "when `buf` is provided") no era alcanzable; el override es defensa extra.
+    `excel-reportes.service.spec.ts` genera y **relee** los .xlsx → cubre que `exceljs` sigue OK
+    con `uuid@11`.
+- **Paso 4:** `.github/workflows/ci.yml` gana un paso `npm audit --audit-level=high` tras `npm ci`.
+- Nota de máquina (no del repo): el `~/.npmrc` global tiene `force=true`. No afecta a este cambio
+  (`npm ci` y `npm audit` dan resultados coherentes local y en CI), pero conviene quitarlo.
+
+Verificado: `npm audit` 0 · `npm ci` · lint · build · `npm test` 25 suites / **188 tests** verde.
 
 ### Notas de dependencia (ronda 3)
 

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { AppDataSource } from '../data-source';
 import { Empresa } from '../../modules/empresa/entities/empresa.entity';
 import { Consecutivo } from '../../modules/empresa/entities/consecutivo.entity';
