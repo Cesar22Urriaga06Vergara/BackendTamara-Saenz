@@ -1,6 +1,47 @@
-node_modules/
+# NestJS build output
 dist/
+dist/**
+**/dist/
+build/
+
+# Subidas en tiempo de ejecución y salidas locales de agentes (nunca versionar)
 uploads/
+Claude outputs/
+
+# Variables de entorno
+# Los secretos reales viven en `.env` (ignorado). `.env.test` y `.env.example`
+# solo contienen valores ficticios y SÍ se versionan: el CI
+# (.github/workflows/ci.yml) y `test/jest.setup.ts` cargan `.env.test`.
 .env
-.env.test
-*.log
+.env.*
+!.env.test
+!.env.example
+
+# ==========================================================
+# REGLAS DE PRECISIÓN PARA IA & AGENT SKILLS (BACKEND)
+# ==========================================================
+.agents/
+.github/skills/
+.claude/
+skills-lock.json
+
+# Bloquear reportes locales, análisis y preguntas
+*ANALISIS*
+*PREGUNTAS*
+*auditoria*.md
+*plan*.md
+*fases*.md
+*bitacora*.md
+
+# Bloquear archivos de habilidades recursivos
+SKILL.md
+SKILL.MD
+*SKILL*.md
+
+# Forzar exclusión de otros .md generados por IA en subcarpetas
+**/*.md
+
+# EXCEPCIONES: Permitir siempre el README de desarrollo
+!README.md
+
+node_modules

@@ -26,10 +26,10 @@ export class EmpresaController {
   constructor(private readonly service: EmpresaService) {}
 
   /**
-   * Hallazgo RBAC-03 de la auditoría: expone `porcentajeMoraMensual`/`diasGraciaMora` (y el
-   * resto de configuración de negocio), que §3.2 no lista entre lo que Recepcionista puede
-   * consultar. La página que lo consume (`/configuracion`) ya está bloqueada para
-   * Recepcionista en el frontend; esta restricción cierra la brecha también en el backend.
+   * Hallazgo RBAC-03 de la auditoría: expone la configuración de negocio (horizonte de canon,
+   * saldo inicial de caja), que §3.2 no lista entre lo que Recepcionista puede consultar. La
+   * página que lo consume (`/configuracion`) ya está bloqueada para Recepcionista en el
+   * frontend; esta restricción cierra la brecha también en el backend.
    */
   @Get()
   @Roles(Rol.ADMINISTRADOR)

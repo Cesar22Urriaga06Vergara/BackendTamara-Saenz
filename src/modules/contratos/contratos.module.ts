@@ -6,6 +6,7 @@ import { Cliente } from '../personas/entities/cliente.entity';
 import { Codeudor } from '../personas/entities/codeudor.entity';
 import { Inmueble } from '../inmuebles/entities/inmueble.entity';
 import { ObligacionesModule } from '../obligaciones/obligaciones.module';
+import { MovimientosModule } from '../movimientos/movimientos.module';
 import { ContratosService } from './contratos.service';
 import { ContratosController } from './contratos.controller';
 
@@ -13,6 +14,7 @@ import { ContratosController } from './contratos.controller';
   imports: [
     TypeOrmModule.forFeature([Contrato, ContratoHistorialEstado, Cliente, Codeudor, Inmueble]),
     ObligacionesModule,
+    MovimientosModule,
   ],
   controllers: [ContratosController],
   providers: [ContratosService],

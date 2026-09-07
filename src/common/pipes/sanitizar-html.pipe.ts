@@ -27,8 +27,30 @@ export class SanitizarHtmlPipe implements PipeTransform {
   }
 
   private limpiarValor(valor: any): any {
-    if (typeof valor === 'string') return sanitizeHtml(valor, { allowedTags: [], allowedAttributes: {} });
+    if (typeof valor === 'string') {
+      const sanitizado = sanitizeHtml(valor, { allowedTags: [], allowedAttributes: {} });
+      return this.decodificarEntidadesBasicas(sanitizado);
+    }
     if (valor !== null && typeof valor === 'object') return this.limpiarObjeto(valor);
     return valor;
+  }
+
+  /**
+   * `sanitizeHtml` con `allowedTags: []` ya garantiza que ningún tag real sobrevive (protección
+   * XSS intacta) — pero su serializador interno igual codifica como entidad HTML los caracteres
+   * `& < >` que quedan como texto plano (ej. "Tamara & Saenz" -> "Tamara &amp; Saenz"),
+   * corrompiendo en silencio datos de negocio legítimos (nombres, razones sociales). Decodificarlos
+   * de vuelta es seguro: no queda ninguna estructura de tag en el resultado que pudiera
+   * "reactivarse", y este sistema nunca renderiza estos valores como HTML (sin `v-html` en el
+   * frontend; PDFKit dibuja texto literal) — solo como texto plano, donde `&`/`<`/`>` no son
+   * peligrosos.
+   */
+  private decodificarEntidadesBasicas(texto: string): string {
+    return texto
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&');
   }
 }

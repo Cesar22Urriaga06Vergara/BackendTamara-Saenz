@@ -3,8 +3,17 @@ import * as PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { EstadoRecibo, ReciboCaja } from '../recaudo/entities/recibo-caja.entity';
-import { ConceptoAplicacion } from '../recaudo/entities/aplicacion-pago.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
+
+/** Paleta compartida con `PdfNovedadService` — mismos nombres, mismos valores, un solo lugar de verdad visual. */
+const COLOR_TEXTO = '#1A1A1A';
+const COLOR_GRIS = '#4A4D52';
+const COLOR_ORO = '#CFA052';
+const COLOR_ORO_CLARO = '#FBF3E4';
+const COLOR_BORDE = '#D9D9D9';
+const COLOR_DIVISOR = '#E5E7EB';
+const COLOR_ROJO = '#DC2626';
+const COLOR_BLANCO = '#FFFFFF';
 
 /**
  * Genera el Recibo de Caja oficial en PDF vectorial (PDFKit), en formato
@@ -52,24 +61,27 @@ export class PdfReciboService {
       if (empresa.logoUrl) {
         const rutaFisicaLogo = join(process.cwd(), empresa.logoUrl);
         if (existsSync(rutaFisicaLogo)) {
-          // Tamaño +28% respecto al original (70x50 -> 90x64), misma relación de aspecto vía `fit`.
-          const anchoLogo = 90;
-          const altoLogo = 64;
+          // Tamaño base +25% respecto al anterior (90x64 -> 112x80, misma relación de aspecto vía
+          // `fit`), escalado además por `espaciado.escala` en Media Carta — antes el logo NO se
+          // reducía ahí (quedaba igual de grande en una hoja de la mitad de alto), así que
+          // agrandarlo sin este ajuste lo habría hecho desproporcionado en ese formato.
+          const anchoLogo = Math.round(112 * espaciado.escala);
+          const altoLogo = Math.round(80 * espaciado.escala);
           doc.image(rutaFisicaLogo, tamano[0] - margenX - anchoLogo, doc.y, { fit: [anchoLogo, altoLogo] });
           yTrasLogo = doc.y + altoLogo + 10;
         }
       }
 
       // ---- Encabezado corporativo (siempre desde la ficha de Empresa en BD) ----
-      doc.fillColor('#1A1A1A').fontSize(16).font('Helvetica-Bold').text(empresa.nombre, { align: 'left' });
-      doc.fillColor('#CFA052').fontSize(10).font('Helvetica-Oblique').text(`"${empresa.slogan}"`, { align: 'left' });
-      doc.fillColor('#4A4D52').fontSize(9).font('Helvetica').text(`NIT: ${empresa.nit}`);
+      doc.fillColor(COLOR_TEXTO).fontSize(16).font('Helvetica-Bold').text(empresa.nombre, { align: 'left' });
+      doc.fillColor(COLOR_ORO).fontSize(10).font('Helvetica-Oblique').text(`"${empresa.slogan}"`, { align: 'left' });
+      doc.fillColor(COLOR_GRIS).fontSize(9).font('Helvetica').text(`NIT: ${empresa.nit}`);
       if (empresa.direccion) doc.text(`Dirección: ${empresa.direccion}`);
       if (empresa.telefono) doc.text(`Tel: ${empresa.telefono}`);
       doc.moveDown(0.5 * espaciado.escala);
       doc.y = Math.max(doc.y, yTrasLogo);
       doc
-        .strokeColor('#CFA052')
+        .strokeColor(COLOR_ORO)
         .lineWidth(2)
         .moveTo(40, doc.y)
         .lineTo(tamano[0] - 40, doc.y)
@@ -77,8 +89,12 @@ export class PdfReciboService {
       doc.moveDown(1 * espaciado.escala);
 
       // ---- Título y consecutivo ----
-      doc.fillColor('#1A1A1A').fontSize(14).font('Helvetica-Bold').text('RECIBO DE CAJA', { align: 'center' });
-      doc.fontSize(11).font('Helvetica').text(`No. ${recibo.consecutivo}`, { align: 'center' });
+      doc.fillColor(COLOR_TEXTO).fontSize(14).font('Helvetica-Bold').text('RECIBO DE CAJA', { align: 'center' });
+      doc
+        .fillColor(COLOR_ORO)
+        .fontSize(12)
+        .font('Helvetica-Bold')
+        .text(`No. ${recibo.consecutivo}`, { align: 'center' });
       doc.moveDown(0.5 * espaciado.escala);
 
       // ---- Banner de ANULADO: un recibo anulado nunca debe generar un PDF indistinguible
@@ -86,16 +102,16 @@ export class PdfReciboService {
       if (recibo.estado === EstadoRecibo.ANULADO) {
         const anchoBanner = tamano[0] - margenX * 2;
         const altoBanner = esMediaCarta ? 20 : 26;
-        doc.rect(margenX, doc.y, anchoBanner, altoBanner).fill('#DC2626');
+        doc.rect(margenX, doc.y, anchoBanner, altoBanner).fill(COLOR_ROJO);
         doc
-          .fillColor('#FFFFFF')
+          .fillColor(COLOR_BLANCO)
           .font('Helvetica-Bold')
           .fontSize(esMediaCarta ? 10 : 12)
           .text('RECIBO ANULADO', margenX, doc.y + (esMediaCarta ? 5 : 7), { width: anchoBanner, align: 'center' });
         doc.y += altoBanner + 4;
         if (recibo.motivoAnulacion) {
           doc
-            .fillColor('#DC2626')
+            .fillColor(COLOR_ROJO)
             .font('Helvetica')
             .fontSize(8.5)
             .text(`Motivo de anulación: ${recibo.motivoAnulacion}`, margenX, doc.y, {
@@ -141,10 +157,10 @@ export class PdfReciboService {
       doc
         .roundedRect(margenX, yTarjeta, anchoContenido, altoTarjeta, 4)
         .lineWidth(0.75)
-        .strokeColor('#D9D9D9')
+        .strokeColor(COLOR_BORDE)
         .stroke();
       doc
-        .strokeColor('#E5E7EB')
+        .strokeColor(COLOR_DIVISOR)
         .lineWidth(0.5)
         .moveTo(margenX + padTarjeta, yDivisor)
         .lineTo(margenX + anchoContenido - padTarjeta, yDivisor)
@@ -154,9 +170,9 @@ export class PdfReciboService {
         doc
           .font('Helvetica-Bold')
           .fontSize(9)
-          .fillColor('#1A1A1A')
+          .fillColor(COLOR_TEXTO)
           .text(`${etiqueta} `, x, y, { continued: true, width: anchoColumna });
-        doc.font('Helvetica').fillColor('#4A4D52').text(valor, { width: anchoColumna });
+        doc.font('Helvetica').fillColor(COLOR_GRIS).text(valor, { width: anchoColumna });
       };
       celdaEtiquetaValor('Arrendatario:', contrato.cliente?.nombreCompleto ?? '—', xColIzq, yFila1);
       celdaEtiquetaValor('Documento:', contrato.cliente?.numeroDocumento ?? '—', xColDer, yFila1);
@@ -174,7 +190,7 @@ export class PdfReciboService {
       // Un recibo de caja no tiene línea de "producto" con cantidad/precio unitario real:
       // cada fila es un medio de pago por su monto total, así que CANT. es siempre 1 y
       // PRECIO UNITARIO == TOTAL para esa fila (no se inventan datos que no existen).
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('#1A1A1A').text('Detalle de pago', margenX, doc.y);
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR_TEXTO).text('Detalle de pago', margenX, doc.y);
       doc.moveDown(0.4 * espaciado.escala);
 
       const colCantX = margenX;
@@ -188,8 +204,8 @@ export class PdfReciboService {
       const altoFilaTabla = espaciado.altoFila;
 
       const yEncabezado = doc.y;
-      doc.rect(margenX, yEncabezado, anchoContenido, altoFilaTabla).fill('#4A4D52');
-      doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8.5);
+      doc.rect(margenX, yEncabezado, anchoContenido, altoFilaTabla).fill(COLOR_GRIS);
+      doc.fillColor(COLOR_BLANCO).font('Helvetica-Bold').fontSize(8.5);
       doc.text('CANT.', colCantX, yEncabezado + 6, { width: colCantW, align: 'center' });
       doc.text('DESCRIPCIÓN', colDescX + 6, yEncabezado + 6, { width: colDescW - 6, align: 'left' });
       doc.text('PRECIO UNITARIO', colPuX, yEncabezado + 6, { width: colPuW - 6, align: 'right' });
@@ -199,14 +215,14 @@ export class PdfReciboService {
       recibo.detallesPago.forEach((detalle) => {
         const descripcion = `${detalle.medioPago}${detalle.referencia ? ` (Ref: ${detalle.referencia})` : ''}`;
         const montoFormateado = this.formatoMonedaCO(detalle.monto);
-        doc.font('Helvetica').fontSize(9).fillColor('#1A1A1A');
+        doc.font('Helvetica').fontSize(9).fillColor(COLOR_TEXTO);
         doc.text('1', colCantX, yFilaTabla + 6, { width: colCantW, align: 'center' });
         doc.text(descripcion, colDescX + 6, yFilaTabla + 6, { width: colDescW - 6, align: 'left' });
         doc.text(montoFormateado, colPuX, yFilaTabla + 6, { width: colPuW - 6, align: 'right' });
         doc.text(montoFormateado, colTotalX, yFilaTabla + 6, { width: colTotalW - 6, align: 'right' });
         yFilaTabla += altoFilaTabla;
         doc
-          .strokeColor('#E5E7EB')
+          .strokeColor(COLOR_DIVISOR)
           .lineWidth(0.5)
           .moveTo(margenX, yFilaTabla)
           .lineTo(margenX + anchoContenido, yFilaTabla)
@@ -215,41 +231,37 @@ export class PdfReciboService {
 
       doc.y = yFilaTabla + espaciado.gapPeque;
 
-      // ---- Tabla de aplicación del pago (a qué obligación/concepto se destinó cada monto) ----
+      // ---- Tabla de aplicación del pago (a qué obligación se destinó cada monto) ----
       // §20 de la especificación: el recibo debe explicar cómo se aplicó el dinero (concepto,
-      // período, mora separada, saldo posterior), no solo mostrar el total recibido por medio
-      // de pago. `recibo.aplicaciones` puede venir vacío en recibos generados antes de este
-      // hallazgo (RECAUDO-03) — en ese caso la tabla simplemente no se dibuja.
+      // período, saldo posterior), no solo mostrar el total recibido por medio de pago.
+      // `recibo.aplicaciones` puede venir vacío en recibos generados antes de este hallazgo
+      // (RECAUDO-03) — en ese caso la tabla simplemente no se dibuja.
       if (recibo.aplicaciones && recibo.aplicaciones.length > 0) {
         doc.moveDown(0.6 * espaciado.escala);
-        doc.font('Helvetica-Bold').fontSize(10).fillColor('#1A1A1A').text('Aplicación del pago', margenX, doc.y);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR_TEXTO).text('Aplicación del pago', margenX, doc.y);
         doc.moveDown(0.4 * espaciado.escala);
 
         const colConceptoX = margenX;
         const colConceptoW = 210;
         const colPeriodoX = colConceptoX + colConceptoW;
-        const colPeriodoW = 90;
-        const colTipoX = colPeriodoX + colPeriodoW;
-        const colTipoW = 60;
-        const colValorX = colTipoX + colTipoW;
-        const colValorW = 86;
+        const colPeriodoW = 110;
+        const colValorX = colPeriodoX + colPeriodoW;
+        const colValorW = 106;
         const colSaldoX = colValorX + colValorW;
-        const colSaldoW = anchoContenido - colConceptoW - colPeriodoW - colTipoW - colValorW;
+        const colSaldoW = anchoContenido - colConceptoW - colPeriodoW - colValorW;
 
         const yEncabezadoAplic = doc.y;
-        doc.rect(margenX, yEncabezadoAplic, anchoContenido, altoFilaTabla).fill('#4A4D52');
-        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8.5);
+        doc.rect(margenX, yEncabezadoAplic, anchoContenido, altoFilaTabla).fill(COLOR_GRIS);
+        doc.fillColor(COLOR_BLANCO).font('Helvetica-Bold').fontSize(8.5);
         doc.text('CONCEPTO', colConceptoX + 6, yEncabezadoAplic + 6, { width: colConceptoW - 6, align: 'left' });
         doc.text('PERÍODO', colPeriodoX, yEncabezadoAplic + 6, { width: colPeriodoW - 6, align: 'left' });
-        doc.text('TIPO', colTipoX, yEncabezadoAplic + 6, { width: colTipoW - 6, align: 'left' });
         doc.text('VALOR APLIC.', colValorX, yEncabezadoAplic + 6, { width: colValorW - 6, align: 'right' });
         doc.text('SALDO POST.', colSaldoX, yEncabezadoAplic + 6, { width: colSaldoW - 6, align: 'right' });
 
         let yFilaAplic = yEncabezadoAplic + altoFilaTabla;
         recibo.aplicaciones.forEach((aplicacion) => {
           const obligacion = aplicacion.obligacion as any;
-          const tipo = aplicacion.concepto === ConceptoAplicacion.MORA ? 'Mora' : 'Capital';
-          doc.font('Helvetica').fontSize(8.5).fillColor('#1A1A1A');
+          doc.font('Helvetica').fontSize(8.5).fillColor(COLOR_TEXTO);
           doc.text(obligacion?.concepto ?? '—', colConceptoX + 6, yFilaAplic + 6, {
             width: colConceptoW - 6,
             align: 'left',
@@ -258,7 +270,6 @@ export class PdfReciboService {
             width: colPeriodoW - 6,
             align: 'left',
           });
-          doc.text(tipo, colTipoX, yFilaAplic + 6, { width: colTipoW - 6, align: 'left' });
           doc.text(this.formatoMonedaCO(aplicacion.montoAplicado), colValorX, yFilaAplic + 6, {
             width: colValorW - 6,
             align: 'right',
@@ -271,7 +282,7 @@ export class PdfReciboService {
           );
           yFilaAplic += altoFilaTabla;
           doc
-            .strokeColor('#E5E7EB')
+            .strokeColor(COLOR_DIVISOR)
             .lineWidth(0.5)
             .moveTo(margenX, yFilaAplic)
             .lineTo(margenX + anchoContenido, yFilaAplic)
@@ -282,19 +293,28 @@ export class PdfReciboService {
       }
 
       doc
-        .strokeColor('#4A4D52')
+        .strokeColor(COLOR_GRIS)
         .lineWidth(1)
         .moveTo(margenX, doc.y)
         .lineTo(tamano[0] - margenX, doc.y)
         .stroke();
       doc.moveDown(0.5 * espaciado.escala);
 
+      // ---- Total destacado: caja de color de fondo para que salte a la vista de inmediato,
+      // mismo criterio visual que ya usa la insignia de estado del Recibo de Novedad. ----
+      const altoCajaTotal = esMediaCarta ? 20 : 30;
+      const yCajaTotal = doc.y;
+      doc.roundedRect(margenX, yCajaTotal, anchoContenido, altoCajaTotal, 4).fill(COLOR_ORO_CLARO);
       doc
         .font('Helvetica-Bold')
-        .fontSize(11)
-        .fillColor('#1A1A1A')
-        .text('Valor total recibido: ', margenX, doc.y, { continued: true, width: anchoContenido })
+        .fontSize(esMediaCarta ? 10 : 13)
+        .fillColor(COLOR_TEXTO)
+        .text('Valor total recibido: ', margenX + 12, yCajaTotal + (esMediaCarta ? 5 : 9), {
+          continued: true,
+          width: anchoContenido - 24,
+        })
         .text(this.formatoMonedaCO(recibo.valorTotal), { align: 'right' });
+      doc.y = yCajaTotal + altoCajaTotal + espaciado.gapPeque;
       if (Number(recibo.excedente) > 0) {
         // Por defecto el excedente se devuelve como cambio; solo queda como saldo a favor
         // cuando el cliente lo pidió expresamente (RDN-01, hallazgo RECAUDO-02 de la auditoría).
@@ -304,7 +324,7 @@ export class PdfReciboService {
         doc
           .font('Helvetica')
           .fontSize(9)
-          .fillColor('#CFA052')
+          .fillColor(COLOR_ORO)
           .text(`${etiquetaExcedente}: ${this.formatoMonedaCO(recibo.excedente)}`, margenX, doc.y, {
             width: anchoContenido,
           });
@@ -312,7 +332,7 @@ export class PdfReciboService {
 
       doc.moveDown(2 * espaciado.escala);
       doc
-        .fillColor('#4A4D52')
+        .fillColor(COLOR_GRIS)
         .fontSize(8)
         .font('Helvetica-Oblique')
         .text('Documento generado por el sistema — no requiere firma manuscrita.', { align: 'center' });

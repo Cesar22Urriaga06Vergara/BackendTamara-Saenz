@@ -28,12 +28,9 @@ export class Empresa {
   logoUrl: string | null;
 
   // ---- Parámetros globales de negocio ----
-  @Column({ type: 'int', default: 5 })
-  diasGraciaMora: number;
-
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 1.5 })
-  porcentajeMoraMensual: number;
-
+  // NOTA: `diasGraciaMora`/`porcentajeMoraMensual` se retiraron de aquí el 2026-09-01 (decisión
+  // de negocio: ya no hay costo de mora / interés por retraso). Las columnas físicas
+  // correspondientes quedaron huérfanas en la BD (con su DEFAULT), sin campo mapeado aquí.
   @Column({ type: 'int', default: 3 })
   horizonteMesesCanon: number;
 

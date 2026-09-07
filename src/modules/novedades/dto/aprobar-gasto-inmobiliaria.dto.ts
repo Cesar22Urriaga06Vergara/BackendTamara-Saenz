@@ -1,7 +1,8 @@
-import { IsNumber, IsString, Min } from 'class-validator';
+import { IsInt, IsString, Min } from 'class-validator';
 
-/** El Admin aprueba: genera movimiento de caja tipo EGRESO. */
+/** El Admin aprueba el gasto de la inmobiliaria (APROBADO ≠ PAGADO): no mueve dinero todavía. */
 export class AprobarGastoInmobiliariaDto {
-  @IsNumber() @Min(0) monto: number;
+  /** COP no maneja centavos (hallazgo B3 de la auditoría contable 2026-09-01). */
+  @IsInt() @Min(1) monto: number;
   @IsString() concepto: string;
 }

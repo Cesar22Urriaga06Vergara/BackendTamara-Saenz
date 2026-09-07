@@ -11,11 +11,13 @@ import { AprobarGastoInmobiliariaDto } from './dto/aprobar-gasto-inmobiliaria.dt
 import { PagarGastoInmobiliariaDto } from './dto/pagar-gasto-inmobiliaria.dto';
 import { Inmueble } from '../inmuebles/entities/inmueble.entity';
 import { Contrato } from '../contratos/entities/contrato.entity';
+import { Obligacion, TipoObligacion, EstadoObligacion } from '../obligaciones/entities/obligacion.entity';
 import { ObligacionesService } from '../obligaciones/obligaciones.service';
 import { MovimientosService } from '../movimientos/movimientos.service';
 import { OrigenMovimiento } from '../movimientos/entities/movimiento.entity';
 import { ConsecutivoService } from '../empresa/consecutivo.service';
 import { paginar } from '../../common/utils/paginar.util';
+import { fechaLocalDesdeString } from '../../common/utils/fecha.util';
 
 @Injectable()
 export class NovedadesService {
@@ -50,7 +52,9 @@ export class NovedadesService {
         inmueble,
         contrato,
         descripcion: dto.descripcion,
-        fecha: new Date(dto.fecha),
+        // `fechaLocalDesdeString` evita el mismo off-by-one de MORA-01/CONT-04: `new
+        // Date("YYYY-MM-DD")` en una zona horaria negativa persistía el día calendario anterior.
+        fecha: fechaLocalDesdeString(dto.fecha),
         observaciones: dto.observaciones ?? null,
         responsableSugerido: dto.responsableSugerido,
         estado: EstadoNovedad.ABIERTA,
@@ -62,7 +66,11 @@ export class NovedadesService {
   }
 
   async listar(filtro: FilterNovedadDto) {
-    const qb = this.repo.createQueryBuilder('n').leftJoinAndSelect('n.inmueble', 'inmueble');
+    const qb = this.repo
+      .createQueryBuilder('n')
+      .leftJoinAndSelect('n.inmueble', 'inmueble')
+      .leftJoinAndSelect('n.contrato', 'contrato')
+      .leftJoinAndSelect('contrato.cliente', 'cliente');
 
     if (filtro.barrio) qb.andWhere('inmueble.barrio = :barrio', { barrio: filtro.barrio });
     if (filtro.estado) qb.andWhere('n.estado = :estado', { estado: filtro.estado });
@@ -253,5 +261,64 @@ export class NovedadesService {
     if (novedad.estado === EstadoNovedad.ANULADA) {
       throw new BadRequestException('No se puede aprobar una novedad anulada.');
     }
+  }
+
+  /**
+   * Revierte una aprobación financiera mal hecha (hallazgo A4-a): tras aprobar, la novedad
+   * quedaba `CERRADA` con `impactoFinanciero != PENDIENTE` y `validarAprobable` la bloqueaba
+   * para siempre — no había forma de re-emitir el cargo correcto. Solo procede si el impacto
+   * aún no se materializó en dinero:
+   *  - `CARGO_ARRENDATARIO`: la obligación NOVEDAD generada debe seguir `PENDIENTE` sin abonos;
+   *    se anula aquí mismo. Si ya tiene pagos → 400 (revertir el pago desde Recaudo primero).
+   *  - `GASTO_INMOBILIARIA`: el gasto NO debe estar pagado. Si `gastoPagado` → 400 (revertir el
+   *    movimiento desde Movimientos primero).
+   * En ambos casos la novedad vuelve a `impactoFinanciero = PENDIENTE`, `estado = EN_SEGUIMIENTO`.
+   */
+  async revertirAprobacion(id: string, motivo: string, usuarioEmail: string): Promise<Novedad> {
+    return this.dataSource.transaction(async (manager) => {
+      const novedad = await manager
+        .createQueryBuilder(Novedad, 'n')
+        .setLock('pessimistic_write')
+        .where('n.id = :id', { id })
+        .getOne();
+      if (!novedad) throw new NotFoundException('Novedad no encontrada.');
+      if (novedad.impactoFinanciero === ImpactoFinanciero.PENDIENTE) {
+        throw new BadRequestException('Esta novedad no tiene ninguna aprobación financiera que revertir.');
+      }
+
+      if (novedad.impactoFinanciero === ImpactoFinanciero.CARGO_ARRENDATARIO) {
+        const obligacionRepo = manager.getRepository(Obligacion);
+        const obligacion = await obligacionRepo
+          .createQueryBuilder('o')
+          .setLock('pessimistic_write')
+          .where('o.novedadOrigenId = :id', { id })
+          .andWhere('o.tipo = :tipo', { tipo: TipoObligacion.NOVEDAD })
+          .getOne();
+        if (obligacion) {
+          if (obligacion.estado !== EstadoObligacion.PENDIENTE) {
+            throw new BadRequestException(
+              'La obligación generada por este cargo ya tiene pagos aplicados. Revierta el pago desde Recaudo antes de revertir la aprobación.',
+            );
+          }
+          obligacion.estado = EstadoObligacion.ANULADA;
+          obligacion.motivoAnulacion = `Aprobación de novedad revertida: ${motivo}`;
+          await obligacionRepo.save(obligacion);
+        }
+      } else if (novedad.gastoPagado) {
+        throw new BadRequestException(
+          'Este gasto ya fue pagado. Revierta el movimiento de caja desde Movimientos antes de revertir la aprobación.',
+        );
+      }
+
+      novedad.impactoFinanciero = ImpactoFinanciero.PENDIENTE;
+      novedad.estado = EstadoNovedad.EN_SEGUIMIENTO;
+      novedad.montoAprobado = null;
+      novedad.aprobadoPorEmail = null;
+      // Trazabilidad: el motivo queda en observaciones (append), sin borrar lo que hubiera.
+      novedad.observaciones = [novedad.observaciones, `[${usuarioEmail}] Aprobación revertida: ${motivo}`]
+        .filter(Boolean)
+        .join('\n');
+      return manager.save(novedad);
+    });
   }
 }

@@ -2,9 +2,9 @@ import { EmpresaService } from './empresa.service';
 import { bootstrapTestApp, limpiarBaseDeDatos, TestApp } from '../../../test/test-app';
 
 /**
- * Valida que `EmpresaService` se autorepare con la base de datos en blanco: producción ya no
- * depende de `npm run seed` para tener la fila única de Empresa antes de poder usar
- * `/configuracion`, el registro inicial, o cualquier cálculo que dependa de sus parámetros.
+ * Valida que `EmpresaService` se autorepare con la base de datos en blanco: no depende de que
+ * `npm run seed` haya insertado la fila única de Empresa antes de poder usar `/configuracion`
+ * o cualquier cálculo que dependa de sus parámetros.
  */
 describe('EmpresaService (integración) — autoseed', () => {
   let testApp: TestApp;
@@ -26,8 +26,7 @@ describe('EmpresaService (integración) — autoseed', () => {
   it('crea la fila única de Empresa con valores por defecto si la tabla está vacía', async () => {
     const empresa = await service.obtener();
     expect(empresa.id).toBeDefined();
-    expect(empresa.diasGraciaMora).toBe(5);
-    expect(Number(empresa.porcentajeMoraMensual)).toBe(1.5);
+    expect(empresa.horizonteMesesCanon).toBe(3);
   });
 
   it('no crea una segunda fila si ya existe una', async () => {

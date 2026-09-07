@@ -2,18 +2,22 @@ import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } f
 import { ReciboCaja } from './recibo-caja.entity';
 import { Obligacion } from '../../obligaciones/entities/obligacion.entity';
 
-/** A qué se destinó el monto aplicado: capital de la obligación, o mora acumulada (§10). */
+/**
+ * Concepto operativo actual: el sistema maneja pago neto por capital únicamente.
+ * `MORA` solo se conserva como valor legacy para compatibilidad con filas históricas,
+ * pero ya no se permite crear nuevas aplicaciones con ese concepto en el flujo activo.
+ */
 export enum ConceptoAplicacion {
   CAPITAL = 'CAPITAL',
-  MORA = 'MORA',
 }
 
 /**
  * Traza la aplicación de un recibo de caja sobre una obligación específica.
  * Permite que la anulación de un recibo revierta EXACTAMENTE los abonos que
  * generó (y no solo el movimiento de caja global), devolviendo cada obligación
- * a su estado/saldo previo al pago. `concepto` distingue si se abonó a capital
- * o a mora, para revertir cada uno con el método correcto (hallazgo RECAUDO-01).
+ * a su estado/saldo previo al pago. El flujo actual aplica solo a capital; si
+ * existieran filas legacy con `concepto = 'MORA'`, se manejan solo en compatibilidad
+ * de reversión histórica y no se permiten en nuevos registros.
  */
 @Entity('aplicacion_pago')
 export class AplicacionPago {

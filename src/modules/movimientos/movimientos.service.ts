@@ -1,9 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { Movimiento, OrigenMovimiento, TipoMovimiento } from './entities/movimiento.entity';
+import { Novedad } from '../novedades/entities/novedad.entity';
+import { Contrato } from '../contratos/entities/contrato.entity';
+import { DescuentoDeposito } from '../recaudo/entities/descuento-deposito.entity';
+import { ReciboCaja, EstadoRecibo } from '../recaudo/entities/recibo-caja.entity';
+import { AplicacionPago } from '../recaudo/entities/aplicacion-pago.entity';
 import { ConsecutivoService } from '../empresa/consecutivo.service';
+import { ObligacionesService } from '../obligaciones/obligaciones.service';
 import { paginar } from '../../common/utils/paginar.util';
+import { finDelDiaLocal } from '../../common/utils/fecha.util';
 import { MedioPago } from '../../common/enums/medio-pago.enum';
 
 export interface RegistrarMovimientoInput {
@@ -25,6 +32,7 @@ export class MovimientosService {
   constructor(
     @InjectRepository(Movimiento) private readonly repo: Repository<Movimiento>,
     private readonly consecutivoService: ConsecutivoService,
+    private readonly obligacionesService: ObligacionesService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -154,8 +162,96 @@ export class MovimientosService {
       if (yaReversado) {
         throw new BadRequestException('Este movimiento ya fue reversado previamente.');
       }
-      return this.reversar(movimientoId, motivo, registradoPorEmail, manager);
+
+      const reverso = await this.reversar(movimientoId, motivo, registradoPorEmail, manager);
+
+      // El contra-asiento por sí solo no basta: hay que devolver la ENTIDAD DE ORIGEN a su
+      // estado previo, o el sistema queda inconsistente (el gasto de novedad sigue "pagado" y
+      // no se puede volver a pagar; el depósito sigue "liquidado" con el dinero de vuelta en
+      // el libro) — hallazgo A2-a.
+      await this.revertirEntidadDeOrigen(original, manager);
+
+      return reverso;
     });
+  }
+
+  private async revertirEntidadDeOrigen(original: Movimiento, manager: EntityManager): Promise<void> {
+    if (original.origen === OrigenMovimiento.NOVEDAD && original.novedadId) {
+      const novedadRepo = manager.getRepository(Novedad);
+      const novedad = await novedadRepo
+        .createQueryBuilder('n')
+        .setLock('pessimistic_write')
+        .where('n.id = :id', { id: original.novedadId })
+        .getOne();
+      if (novedad?.gastoPagado) {
+        novedad.gastoPagado = false;
+        novedad.medioPagoGasto = null;
+        novedad.referenciaPagoGasto = null;
+        novedad.fechaPagoGasto = null;
+        novedad.pagadoPorEmail = null;
+        await novedadRepo.save(novedad);
+      }
+      return;
+    }
+
+    if (original.origen === OrigenMovimiento.DEPOSITO && original.contratoId) {
+      const contratoRepo = manager.getRepository(Contrato);
+      const contrato = await contratoRepo
+        .createQueryBuilder('c')
+        .setLock('pessimistic_write')
+        .where('c.id = :id', { id: original.contratoId })
+        .getOne();
+      if (!contrato || !contrato.depositoLiquidadoEn) return;
+
+      const descuentoRepo = manager.getRepository(DescuentoDeposito);
+      const descuentos = await descuentoRepo.find({
+        where: { contrato: { id: contrato.id }, anuladoEn: IsNull() },
+      });
+      const totalDescuentos = descuentos.reduce((acc, d) => acc + Number(d.valor), 0);
+
+      // El depósito original = lo que se devolvió (monto del movimiento) + lo que se descontó.
+      contrato.depositoGarantia = Number(original.monto) + totalDescuentos;
+      contrato.depositoLiquidadoEn = null;
+      await contratoRepo.save(contrato);
+
+      // Si hubo descuento tipo DEUDA, se generó un recibo interno que abonó obligaciones —
+      // hay que revertir esos abonos y anular el recibo, o la deuda quedaría "pagada" con un
+      // depósito que ya no se liquidó (hallazgo LB-6 / F14).
+      const reciboRepo = manager.getRepository(ReciboCaja);
+      const reciboInterno = await reciboRepo
+        .createQueryBuilder('r')
+        .setLock('pessimistic_write')
+        .where('r.contratoId = :id', { id: contrato.id })
+        .andWhere('r.esLiquidacionDeposito = TRUE')
+        .andWhere('r.estado = :estado', { estado: EstadoRecibo.EMITIDO })
+        .getOne();
+      if (reciboInterno) {
+        const aplicacionRepo = manager.getRepository(AplicacionPago);
+        const aplicaciones = await aplicacionRepo.find({
+          where: { recibo: { id: reciboInterno.id } },
+          relations: ['obligacion'],
+        });
+        for (const a of aplicaciones) {
+          if ((a.concepto as string) === 'MORA') {
+            await this.obligacionesService.revertirAbonoMora(a.obligacion.id, Number(a.montoAplicado), manager);
+          } else {
+            await this.obligacionesService.revertirAbono(a.obligacion.id, Number(a.montoAplicado), manager);
+          }
+        }
+        reciboInterno.estado = EstadoRecibo.ANULADO;
+        reciboInterno.motivoAnulacion = `Liquidación de depósito reversada: ${original.concepto}`;
+        await reciboRepo.save(reciboInterno);
+      }
+
+      // Los descuentos de esa liquidación dejan de tener efecto (la liquidación se deshizo).
+      // Se marcan como anulados en vez de borrarlos: la reversión es un flujo de corrección
+      // trazable, no un DELETE — mismo patrón append-only que Movimiento/ReciboCaja (DEP-REV-01).
+      if (descuentos.length) {
+        const anuladoEn = new Date();
+        const motivoAnulacion = `Liquidación de depósito reversada: ${original.concepto}`;
+        await descuentoRepo.save(descuentos.map((d) => ({ ...d, anuladoEn, motivoAnulacion })));
+      }
+    }
   }
 
   async listar(filtro: {
@@ -172,7 +268,9 @@ export class MovimientosService {
     if (filtro.origen) qb.andWhere('m.origen = :origen', { origen: filtro.origen });
     if (filtro.medioPago) qb.andWhere('m.medioPago = :medioPago', { medioPago: filtro.medioPago });
     if (filtro.desde) qb.andWhere('m.creadoEn >= :desde', { desde: filtro.desde });
-    if (filtro.hasta) qb.andWhere('m.creadoEn <= :hasta', { hasta: filtro.hasta });
+    // `hasta` sin hora ("YYYY-MM-DD") contra `creadoEn` datetime: subir al último instante del
+    // día o se excluye casi todo el propio día pedido (misma clase de bug que AUD-021).
+    if (filtro.hasta) qb.andWhere('m.creadoEn <= :hasta', { hasta: finDelDiaLocal(filtro.hasta) });
     qb.orderBy('m.creadoEn', 'DESC');
     return paginar(qb, filtro.page, filtro.limit);
   }

@@ -11,6 +11,7 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",
     "seed": "ts-node src/database/seeds/seed.ts",
+    "seed:demo": "ts-node src/database/seeds/seed-demo.ts",
     "test": "jest --runInBand",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
@@ -27,9 +28,15 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(sanitize-html|htmlparser2|entities|dom-serializer|domelementtype|domhandler|domutils)/)"
+    ],
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/../test/jest.setup.ts"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/../test/jest.setup-after-env.ts"
     ]
   },
   "dependencies": {
@@ -48,6 +55,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "exceljs": "^4.4.0",
+    "helmet": "^8.3.0",
     "mysql2": "^3.10.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

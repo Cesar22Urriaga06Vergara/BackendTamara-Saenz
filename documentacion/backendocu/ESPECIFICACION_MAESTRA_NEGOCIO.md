@@ -99,7 +99,7 @@ Un contrato relaciona como mínimo:
 - fecha de pago del canon;
 - canon;
 - depósito;
-- condiciones de mora;
+- ~~condiciones de mora~~ (retirada — §11);
 - estado.
 
 La fecha de inicio es obligatoria.
@@ -108,7 +108,7 @@ La fecha de pago del canon puede ser diferente de la fecha de inicio.
 
 Si no se especifica una fecha de pago distinta, la fecha de pago del canon será igual a la fecha de inicio.
 
-La fecha de pago del canon es la referencia para vencimiento y cálculo de mora.
+La fecha de pago del canon es la referencia para vencimiento (la mora fue retirada — §11).
 
 ## 6.2 Estados
 
@@ -257,7 +257,9 @@ El orden oficial es:
 
 **1. Canon**
 **2. Novedad**
-**3. Mora**
+
+> El punto 3 (Mora) fue retirado — ver §11. El ejemplo de abajo se conserva como
+> ilustración histórica del cálculo cuando la mora existía.
 
 La interpretación genérica de FIFO se reemplaza por esta regla de negocio concreta.
 
@@ -280,7 +282,18 @@ Resultado:
 
 # 11. Mora
 
+> **RETIRADO POR DECISIÓN DE NEGOCIO — 2026-09-01.** El sistema ya NO cobra mora / interés por
+> retraso. Los cobros son netos, exclusivamente por canon de arrendamiento (y cargos tipo
+> NOVEDAD aprobados). La sección se conserva como referencia histórica. El orden de aplicación
+> del dinero (§10) pasa a ser **Canon → Novedad**. Toda la lógica de cálculo/congelamiento de
+> mora se retiró de servicios y controladores; ver la bitácora "Retiro del costo de mora +
+> auditoría contable (2026-09-01)" en `README.md`.
+
 ## 11.1 Referencia temporal
+
+> **HISTÓRICO.** Esta subsección describe el cálculo de mora tal como existía antes del
+> 2026-09-01. Se conserva solo para poder auditar recibos antiguos que sí cobraron mora. NO
+> describe ningún comportamiento vigente.
 
 La secuencia es:
 
@@ -350,7 +363,7 @@ Flujo general:
 → aplicar dinero
 → canon
 → novedad
-→ mora
+  (mora retirada — §11)
 → registrar aplicación
 → generar recibo
 → actualizar saldo
@@ -529,7 +542,7 @@ Debe mostrar, cuando corresponda:
 - concepto;
 - período;
 - valor aplicado;
-- mora separada;
+- ~~mora separada~~ (retirada — §11);
 - total;
 - saldo posterior;
 - medio de pago;
@@ -570,9 +583,9 @@ La auditoría debe verificar al menos las siguientes invariantes:
 4. Una obligación ANULADA no debe seguir apareciendo como deuda cobrable.
 5. Una obligación con abonos no debe eliminarse como si nunca hubiera tenido movimientos.
 6. Un abono no crea una nueva obligación.
-7. La aplicación del dinero debe respetar Canon → Novedad → Mora.
-8. La mora nunca genera nueva mora.
-9. El porcentaje 0 debe producir mora 0.
+7. La aplicación del dinero debe respetar Canon → Novedad (la mora fue retirada — §11).
+8. La mora nunca genera nueva mora. (histórico — mora retirada)
+9. El porcentaje 0 debe producir mora 0. (histórico — mora retirada)
 10. El efectivo modifica caja.
 11. La transferencia no modifica caja física.
 12. Una devolución no borra el movimiento original.

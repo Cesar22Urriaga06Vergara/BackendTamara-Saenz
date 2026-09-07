@@ -8,7 +8,6 @@ import * as crypto from 'crypto';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { LoginDto } from './dto/login.dto';
-import { RegistroInicialDto } from './dto/registro-inicial.dto';
 
 @Injectable()
 export class AuthService {
@@ -27,16 +26,6 @@ export class AuthService {
     const passwordOk = await bcrypt.compare(dto.password, usuario.passwordHash);
     if (!passwordOk) throw new UnauthorizedException('Credenciales inválidas.');
 
-    return this.emitirTokens(usuario.id, usuario.email, usuario.rol);
-  }
-
-  /**
-   * Bootstrap de producción: crea el primer Administrador (único caso en que un endpoint de
-   * `auth` puede crear un usuario) y lo deja sesionado de inmediato, igual que `login()` —
-   * evita el paso extra de iniciar sesión manualmente justo después de registrarse.
-   */
-  async registroInicial(dto: RegistroInicialDto) {
-    const usuario = await this.usuariosService.registrarPrimerAdministrador(dto);
     return this.emitirTokens(usuario.id, usuario.email, usuario.rol);
   }
 
@@ -71,14 +60,13 @@ export class AuthService {
     const payload = { sub: userId, email, rol };
 
     const accessToken = this.jwtService.sign(payload, {
-      secret: this.config.get('JWT_ACCESS_SECRET'),
+      secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
       expiresIn: this.config.get('JWT_ACCESS_EXPIRES_IN', '15m'),
     });
 
     const refreshTokenPlano = crypto.randomBytes(48).toString('hex');
     const tokenHash = this.hash(refreshTokenPlano);
-    const expiresInDias = this.parseDiasDesdeExpr(this.config.get('JWT_REFRESH_EXPIRES_IN', '7d'));
-    const expiraEn = new Date(Date.now() + expiresInDias * 24 * 60 * 60 * 1000);
+    const expiraEn = new Date(Date.now() + this.parseExpiracionAMs(this.config.get('JWT_REFRESH_EXPIRES_IN', '1d')));
 
     await this.refreshRepo.save(this.refreshRepo.create({ usuarioId: userId, tokenHash, expiraEn }));
 
@@ -94,8 +82,16 @@ export class AuthService {
     return crypto.createHash('sha256').update(valor).digest('hex');
   }
 
-  private parseDiasDesdeExpr(expr: string): number {
-    const match = /^(\d+)d$/.exec(expr);
-    return match ? Number(match[1]) : 7;
+  /**
+   * Parsea una expresión de expiración ("7d", "1d", "12h") a milisegundos. Solo días y horas —
+   * suficiente para la vida del refresh token. Cualquier formato desconocido cae a 1 día
+   * (comportamiento seguro: sesión corta antes que sesión eterna).
+   */
+  private parseExpiracionAMs(expr: string): number {
+    const match = /^(\d+)\s*([dh])$/.exec(expr.trim());
+    if (!match) return 24 * 60 * 60 * 1000; // 1 día
+    const valor = Number(match[1]);
+    const unidadMs = match[2] === 'h' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+    return valor * unidadMs;
   }
 }

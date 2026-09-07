@@ -5,6 +5,7 @@ import { RegistrarPagoDto } from './dto/registrar-pago.dto';
 import { AnularReciboDto } from './dto/anular-recibo.dto';
 import { LiquidarDepositoDto } from './dto/liquidar-deposito.dto';
 import { FilterReciboDto } from './dto/filter-recibo.dto';
+import { FilterDeudoresDto } from './dto/filter-deudores.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
@@ -21,6 +22,12 @@ import { PaginacionDto } from '../../common/dto/paginacion.dto';
 @Roles(Rol.ADMINISTRADOR)
 export class RecaudoController {
   constructor(private readonly service: RecaudoService) {}
+
+  /** Pantalla Recaudo: contratos con cartera vencida (uno por fila, con el total a cobrar). */
+  @Get('deudores')
+  deudores(@Query() filtro: FilterDeudoresDto) {
+    return this.service.deudores(filtro);
+  }
 
   @Post('pagos')
   @AuditAction({ modulo: 'RECAUDO', accion: 'REGISTRAR_PAGO' })

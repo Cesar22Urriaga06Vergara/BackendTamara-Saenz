@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { EstadoInmueble } from '../entities/inmueble.entity';
 
 export class CreateInmuebleDto {
@@ -8,8 +8,9 @@ export class CreateInmuebleDto {
   @IsString() direccion: string;
   @IsString() barrio: string;
 
-  @IsNumber() @Min(0) canonValor: number;
-  @IsOptional() @IsNumber() @Min(0) depositoValor?: number;
+  /** COP no maneja centavos (hallazgo B3 de la auditoría contable 2026-09-01). */
+  @IsInt() @Min(0) canonValor: number;
+  @IsOptional() @IsInt() @Min(0) depositoValor?: number;
 
   @IsOptional() @IsString() codigoEnergia?: string;
   @IsOptional() @IsString() codigoAgua?: string;

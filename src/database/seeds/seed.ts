@@ -26,8 +26,6 @@ async function seed() {
       nombre: process.env.EMPRESA_NOMBRE ?? 'Inversiones Tamara & Saenz S. En C.',
       nit: process.env.EMPRESA_NIT ?? '900000000-1',
       slogan: process.env.EMPRESA_SLOGAN ?? 'Resolvemos tu situacion',
-      diasGraciaMora: Number(process.env.DIAS_GRACIA_MORA ?? 5),
-      porcentajeMoraMensual: Number(process.env.PORCENTAJE_MORA_MENSUAL ?? 1.5),
       horizonteMesesCanon: Number(process.env.HORIZONTE_MESES_CANON ?? 3),
     });
     await empresaRepo.save(empresa);

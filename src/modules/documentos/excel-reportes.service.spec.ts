@@ -47,7 +47,7 @@ describe('ExcelReportesService', () => {
     expect(sheet.getRow(3).getCell(2).value).toBe('Zona Norte');
   });
 
-  it('reporteCartera: la fila de totales suma correctamente saldo pendiente y mora de todas las filas', async () => {
+  it('reporteCartera: la fila de totales suma correctamente el saldo pendiente de todas las filas', async () => {
     const buffer = await service.reporteCartera([
       {
         contrato: { cliente: { nombreCompleto: 'A', numeroDocumento: '1' }, inmueble: { direccion: 'X', barrio: 'Y' } },
@@ -56,7 +56,6 @@ describe('ExcelReportesService', () => {
         fechaVencimiento: new Date(),
         valorOriginal: 500000,
         valorAbonado: 200000,
-        valorMoraAcumulada: 15000,
         estado: 'PARCIAL',
       },
       {
@@ -69,7 +68,6 @@ describe('ExcelReportesService', () => {
         fechaVencimiento: new Date(),
         valorOriginal: 100000,
         valorAbonado: 0,
-        valorMoraAcumulada: 0,
         estado: 'PENDIENTE',
       },
     ]);
@@ -78,11 +76,11 @@ describe('ExcelReportesService', () => {
     // Fila 4 = totales (encabezado=1, dos obligaciones=2,3)
     const filaTotales = sheet.getRow(4);
     expect(filaTotales.getCell(1).value).toBe('TOTAL CARTERA');
+    // Columna 10 = "Saldo pendiente" (ya no hay columna "Mora acumulada").
     expect(filaTotales.getCell(10).value).toBe(400000); // (500000-200000) + (100000-0)
-    expect(filaTotales.getCell(11).value).toBe(15000); // 15000 + 0
   });
 
-  it('reporteRecaudo: refleja valorTotal y excedente como números, no strings', async () => {
+  it('reporteRecaudo: refleja valorTotal y excedente como números, distingue el tipo de documento y totaliza el recaudo neto', async () => {
     const buffer = await service.reporteRecaudo([
       {
         consecutivo: 'REC-000001',
@@ -90,12 +88,28 @@ describe('ExcelReportesService', () => {
         contrato: { cliente: { nombreCompleto: 'C' }, inmueble: { direccion: 'X', barrio: 'Y' } },
         valorTotal: 550000,
         excedente: 50000,
+        excedenteComoSaldoFavor: false,
+        esLiquidacionDeposito: false,
+        estado: 'EMITIDO',
+      },
+      {
+        consecutivo: 'REC-000002',
+        creadoEn: new Date(),
+        contrato: { cliente: { nombreCompleto: 'D' }, inmueble: { direccion: 'X2', barrio: 'Y2' } },
+        valorTotal: 300000,
+        excedente: 0,
+        excedenteComoSaldoFavor: false,
+        esLiquidacionDeposito: true,
         estado: 'EMITIDO',
       },
     ]);
 
     const sheet = await leerHoja(buffer);
-    expect(sheet.getRow(2).getCell(6).value).toBe(550000);
-    expect(sheet.getRow(2).getCell(7).value).toBe(50000);
+    expect(sheet.getRow(2).getCell(6).value).toBe('Pago');
+    expect(sheet.getRow(2).getCell(7).value).toBe(550000);
+    expect(sheet.getRow(2).getCell(8).value).toBe(50000);
+    expect(sheet.getRow(3).getCell(6).value).toBe('Liquidación depósito');
+    // Fila 4 = totales: solo el recibo EMITIDO que no es liquidación, menos el cambio devuelto.
+    expect(sheet.getRow(4).getCell(7).value).toBe(500000); // 550000 - 50000
   });
 });

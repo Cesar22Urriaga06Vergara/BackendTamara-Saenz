@@ -1,9 +1,13 @@
 import { RecaudoService } from './recaudo.service';
 import { ObligacionesService } from '../obligaciones/obligaciones.service';
-import { TipoObligacion, EstadoObligacion } from '../obligaciones/entities/obligacion.entity';
+import { Obligacion, TipoObligacion, EstadoObligacion } from '../obligaciones/entities/obligacion.entity';
 import { Movimiento, OrigenMovimiento } from '../movimientos/entities/movimiento.entity';
 import { Contrato, EstadoContrato } from '../contratos/entities/contrato.entity';
+import { Cliente } from '../personas/entities/cliente.entity';
 import { DescuentoDeposito } from './entities/descuento-deposito.entity';
+import { ReciboCaja } from './entities/recibo-caja.entity';
+import { SaldoFavorCredito } from './entities/saldo-favor-credito.entity';
+import { ConceptoAplicacion } from './entities/aplicacion-pago.entity';
 import { RegistrarPagoDto } from './dto/registrar-pago.dto';
 import { AnularReciboDto } from './dto/anular-recibo.dto';
 import { LiquidarDepositoDto } from './dto/liquidar-deposito.dto';
@@ -21,11 +25,11 @@ import {
 } from '../../../test/test-app';
 
 /**
- * Valida RECAUDO-01 (orden Canon → Novedad → Mora, mora realmente cobrable) y, de paso,
- * CAJA-01 (un movimiento por medio de pago en pagos mixtos) dentro del mismo flujo real de
- * recaudo — contra la base de datos de pruebas, con las transacciones/locks reales.
+ * Valida el orden de aplicación del dinero (Canon → Novedad, sin costo de mora — retirado el
+ * 2026-09-01) y, de paso, CAJA-01 (un movimiento por medio de pago en pagos mixtos) dentro del
+ * mismo flujo real de recaudo — contra la base de datos de pruebas, con transacciones/locks reales.
  */
-describe('RecaudoService (integración) — RECAUDO-01', () => {
+describe('RecaudoService (integración) — orden de aplicación Canon → Novedad', () => {
   let testApp: TestApp;
   let recaudo: RecaudoService;
   let obligaciones: ObligacionesService;
@@ -56,11 +60,9 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     return testApp.dataSource.getRepository(Contrato).findOneByOrFail({ id });
   }
 
-  /** Arma un contrato con una obligación CANON (sin mora, recién vencida) y una NOVEDAD con mora congelable. */
+  /** Arma un contrato con una obligación CANON y una NOVEDAD, ambas vencidas. */
   async function armarEscenarioOficial() {
-    // % y gracia elegidos para que la novedad acumule una mora exacta y verificable:
-    // saldo 150.000 * 3% / 30 * 10 días = 1.500.
-    await configurarEmpresa(testApp.dataSource, { diasGraciaMora: 5, porcentajeMoraMensual: 3 });
+    await configurarEmpresa(testApp.dataSource, {});
     const cliente = await crearCliente(testApp.dataSource);
     const inmueble = await crearInmueble(testApp.dataSource);
     const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
@@ -68,23 +70,25 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     const canon = await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.CANON,
       valorOriginal: 400000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 0, // recién vencido, dentro de gracia -> mora = 0
+      diasVencida: 4,
     });
     const novedad = await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.NOVEDAD,
       valorOriginal: 150000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 10, // -> mora = 150000*0.03/30*10 = 1.500
+      diasVencida: 14,
     });
 
     return { contrato, canon, novedad };
   }
 
-  it('reproduce el ejemplo del §10: Canon → Novedad, Mora aplicada $0 cuando el dinero solo alcanza para capital', async () => {
+  it('no expone MORA como concepto operativo para nuevos pagos', () => {
+    expect(Object.values(ConceptoAplicacion)).toEqual(['CAPITAL']);
+  });
+
+  it('reproduce el ejemplo del §10: Canon íntegro antes que Novedad', async () => {
     const { contrato, canon, novedad } = await armarEscenarioOficial();
 
-    // Pago = exactamente Canon(400.000) + parte de Novedad(100.000) = 500.000; no sobra para mora.
+    // Pago = exactamente Canon(400.000) + parte de Novedad(100.000) = 500.000.
     const recibo = await recaudo.registrarPago(
       dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 500000 }]),
       'admin@test.com',
@@ -98,18 +102,39 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
 
     expect(Number(novedadRecargada.valorAbonado)).toBe(100000); // Novedad pendiente: 50.000
     expect(novedadRecargada.estado).toBe(EstadoObligacion.PARCIAL);
-    expect(Number(novedadRecargada.valorMoraPagada)).toBe(0); // Mora aplicada: $0
-    expect(Number(novedadRecargada.valorMoraAcumulada)).toBe(1500); // Mora congelada, pendiente
 
     expect(Number(recibo.excedente)).toBe(0);
   });
 
-  it('con dinero de sobra, aplica Canon → Novedad → Mora en ese orden, y el resto se devuelve de inmediato como cambio (RDN-01)', async () => {
+  it('el concepto del movimiento de recaudo muestra el nombre del cliente, no su UUID', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource, { nombreCompleto: 'Ana Pérez' });
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
+    await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 400000,
+      diasVencida: 4,
+    });
+
+    const recibo = await recaudo.registrarPago(
+      dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 400000 }]),
+      'admin@test.com',
+    );
+
+    const movimiento = await testApp.dataSource
+      .getRepository(Movimiento)
+      .findOneOrFail({ where: { reciboId: recibo.id, origen: OrigenMovimiento.RECAUDO } });
+    expect(movimiento.concepto).toContain('Ana Pérez');
+    expect(movimiento.concepto).not.toContain(contrato.id);
+  });
+
+  it('con dinero de sobra, aplica Canon → Novedad y el resto se devuelve de inmediato como cambio (RDN-01)', async () => {
     const { contrato, canon, novedad } = await armarEscenarioOficial();
 
-    // Canon(400.000) + Novedad(150.000) + Mora(1.500) + 1.000 de excedente = 552.500
+    // Canon(400.000) + Novedad(150.000) + 1.000 de excedente = 551.000
     const recibo = await recaudo.registrarPago(
-      dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 552500 }]),
+      dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 551000 }]),
       'admin@test.com',
     );
 
@@ -118,8 +143,6 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
 
     expect(canonRecargado.estado).toBe(EstadoObligacion.PAGADA);
     expect(novedadRecargada.estado).toBe(EstadoObligacion.PAGADA); // capital saldado
-    expect(Number(novedadRecargada.valorMoraPagada)).toBe(1500); // mora COBRADA de verdad
-    expect(Number(novedadRecargada.valorMoraAcumulada)).toBe(1500);
 
     // Por defecto (sin pedirlo expresamente) el excedente NO queda como saldo a favor.
     const contratoActualizado = await obtenerContrato(contrato.id);
@@ -140,7 +163,7 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     const recibo = await recaudo.registrarPago(
       {
         contratoId: contrato.id,
-        detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 552500 }],
+        detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 551000 }],
         dejarExcedenteComoSaldoFavor: true,
       },
       'admin@test.com',
@@ -159,27 +182,24 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     expect(cambio).toBeNull(); // no se devuelve cambio: quedó como saldo a favor
   });
 
-  it('una obligación con capital PAGADA pero mora sin cobrar sigue apareciendo como pendiente (no desaparece)', async () => {
+  it('al pagar todo el capital (canon + novedad), la obligación sale de la cartera pendiente', async () => {
     const { contrato, novedad } = await armarEscenarioOficial();
 
-    // Paga TODO el capital (canon 400k + novedad 150k = 550k) pero nada de mora.
+    // Paga TODO el capital (canon 400k + novedad 150k = 550k).
     await recaudo.registrarPago(
       dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 550000 }]),
       'admin@test.com',
     );
 
     const novedadRecargada = await recargarObligacion(testApp.dataSource, novedad.id);
-    expect(novedadRecargada.estado).toBe(EstadoObligacion.PAGADA); // capital: pagada
-    expect(Number(novedadRecargada.valorMoraPagada)).toBe(0); // mora: sin cobrar
+    expect(novedadRecargada.estado).toBe(EstadoObligacion.PAGADA);
 
     const pendientes = await obligaciones.pendientesPorContrato(contrato.id);
-    const novedadEnCartera = pendientes.find((o) => o.id === novedad.id);
-    expect(novedadEnCartera).toBeDefined(); // NO debe desaparecer de la cartera
-    expect(Number(novedadEnCartera!.valorMoraAcumulada)).toBe(1500); // mora pendiente visible
+    expect(pendientes.find((o) => o.id === novedad.id)).toBeUndefined();
   });
 
   it('paga Canon íntegro ANTES que una Novedad mucho más antigua (prueba directa de que ya NO es FIFO por fecha)', async () => {
-    await configurarEmpresa(testApp.dataSource, { diasGraciaMora: 5, porcentajeMoraMensual: 1.5 });
+    await configurarEmpresa(testApp.dataSource, {});
     const cliente = await crearCliente(testApp.dataSource);
     const inmueble = await crearInmueble(testApp.dataSource);
     const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 300000 });
@@ -188,14 +208,12 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     const novedadVieja = await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.NOVEDAD,
       valorOriginal: 200000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 60,
+      diasVencida: 64,
     });
     const canonReciente = await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.CANON,
       valorOriginal: 300000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 0,
+      diasVencida: 4,
     });
 
     // Solo alcanza para el canon completo, nada para la novedad.
@@ -237,13 +255,13 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     expect(movimientos[1].referencia).toBe('REF-777');
   });
 
-  it('anular el recibo revierte capital Y mora, dejando la obligación como si el pago nunca hubiera ocurrido (excedente dejado como saldo a favor)', async () => {
+  it('anular el recibo revierte el capital, dejando la obligación como si el pago nunca hubiera ocurrido (excedente dejado como saldo a favor)', async () => {
     const { contrato, canon, novedad } = await armarEscenarioOficial();
 
     const recibo = await recaudo.registrarPago(
       {
         contratoId: contrato.id,
-        detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 552500 }],
+        detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 551000 }],
         dejarExcedenteComoSaldoFavor: true,
       },
       'admin@test.com',
@@ -257,7 +275,6 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     expect(Number(canonRecargado.valorAbonado)).toBe(0);
     expect(canonRecargado.estado).toBe(EstadoObligacion.PENDIENTE);
     expect(Number(novedadRecargada.valorAbonado)).toBe(0);
-    expect(Number(novedadRecargada.valorMoraPagada)).toBe(0); // la mora COBRADA también se revierte
     expect(novedadRecargada.estado).toBe(EstadoObligacion.PENDIENTE);
 
     const contratoActualizado = await obtenerContrato(contrato.id);
@@ -285,6 +302,109 @@ describe('RecaudoService (integración) — RECAUDO-01', () => {
     expect(reversoDelCambio).toBeDefined(); // el cambio entregado también se recupera al anular
     expect(reversoDelCambio!.esReverso).toBe(true);
   });
+
+  it('F9: rechaza registrar un pago sobre un contrato sin ninguna obligación pendiente', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
+    // No se crea ninguna obligación.
+
+    await expect(
+      recaudo.registrarPago(dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 400000 }]), 'admin@test.com'),
+    ).rejects.toThrow('no tiene obligaciones pendientes');
+  });
+
+  it('F10: cuando el saldo a favor preexistente supera lo que el pago aplica a deuda, solo se devuelve el EFECTIVO sobrante — el crédito no consumido no se "devuelve"', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
+
+    // Deuda pequeña (30.000) y saldo a favor preexistente grande (50.000).
+    const canon = await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 30000,
+      diasVencida: 4,
+    });
+    await testApp.dataSource.getRepository(SaldoFavorCredito).save(
+      testApp.dataSource.getRepository(SaldoFavorCredito).create({
+        contrato,
+        recibo: null,
+        montoOriginal: 50000,
+        montoDisponible: 50000,
+      }),
+    );
+    await testApp.dataSource.getRepository(Contrato).update(contrato.id, { saldoAFavor: 50000 });
+
+    // Paga 400.000 efectivo. El motor aplica 30.000 al canon usando el saldo a favor primero;
+    // sobran 20.000 de saldo a favor sin usar + los 400.000 de efectivo. ANTES el "cambio" era
+    // 420.000 (efectivo + crédito sin usar) con pérdida de 20.000; ahora es 400.000.
+    const recibo = await recaudo.registrarPago(
+      dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 400000 }]),
+      'admin@test.com',
+    );
+
+    expect(Number(recibo.excedente)).toBe(400000); // solo el efectivo entregado
+    expect(Number(recibo.saldoFavorConsumido)).toBe(30000);
+
+    expect((await recargarObligacion(testApp.dataSource, canon.id)).estado).toBe(EstadoObligacion.PAGADA);
+
+    const contratoRecargado = await obtenerContrato(contrato.id);
+    expect(Number(contratoRecargado.saldoAFavor)).toBe(20000); // 50.000 - 30.000 consumido; NO se devolvió
+
+    const cambio = await testApp.dataSource
+      .getRepository(Movimiento)
+      .findOneOrFail({ where: { reciboId: recibo.id, concepto: `Cambio entregado — recibo ${recibo.consecutivo}` } });
+    expect(Number(cambio.monto)).toBe(400000);
+  });
+
+  it('F11: anular un recibo que consumió saldo a favor preexistente restaura la deuda Y devuelve ese saldo a favor', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
+
+    const canon = await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 400000,
+      diasVencida: 4,
+    });
+    await testApp.dataSource.getRepository(SaldoFavorCredito).save(
+      testApp.dataSource.getRepository(SaldoFavorCredito).create({
+        contrato,
+        recibo: null,
+        montoOriginal: 50000,
+        montoDisponible: 50000,
+      }),
+    );
+    await testApp.dataSource.getRepository(Contrato).update(contrato.id, { saldoAFavor: 50000 });
+
+    // Paga 350.000 efectivo + 50.000 de saldo a favor = canon 400.000 exacto.
+    const recibo = await recaudo.registrarPago(
+      dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 350000 }]),
+      'admin@test.com',
+    );
+    expect(Number(recibo.saldoFavorConsumido)).toBe(50000);
+    expect((await recargarObligacion(testApp.dataSource, canon.id)).estado).toBe(EstadoObligacion.PAGADA);
+    expect(Number((await obtenerContrato(contrato.id)).saldoAFavor)).toBe(0);
+
+    await recaudo.anular(recibo.id, dtoAnular('error'), 'admin@test.com');
+
+    // Deuda restaurada y saldo a favor de vuelta.
+    const canonRecargado = await recargarObligacion(testApp.dataSource, canon.id);
+    expect(Number(canonRecargado.valorAbonado)).toBe(0);
+    expect(canonRecargado.estado).toBe(EstadoObligacion.PENDIENTE);
+    expect(Number((await obtenerContrato(contrato.id)).saldoAFavor)).toBe(50000);
+
+    const creditosDisponibles = await testApp.dataSource
+      .getRepository(SaldoFavorCredito)
+      .createQueryBuilder('sf')
+      .where('sf.contratoId = :id', { id: contrato.id })
+      .andWhere('sf.montoDisponible > 0')
+      .getMany();
+    expect(creditosDisponibles.reduce((s, c) => s + Number(c.montoDisponible), 0)).toBe(50000);
+  });
 });
 
 /**
@@ -311,7 +431,7 @@ describe('RecaudoService (integración) — RECAUDO-03', () => {
   });
 
   it('obtener() incluye el desglose de aplicación con concepto, período y saldo posterior por obligación', async () => {
-    await configurarEmpresa(testApp.dataSource, { diasGraciaMora: 5, porcentajeMoraMensual: 3 });
+    await configurarEmpresa(testApp.dataSource, {});
     const cliente = await crearCliente(testApp.dataSource);
     const inmueble = await crearInmueble(testApp.dataSource);
     const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
@@ -319,25 +439,23 @@ describe('RecaudoService (integración) — RECAUDO-03', () => {
     const canon = await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.CANON,
       valorOriginal: 400000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 0,
+      diasVencida: 4,
     });
     const novedad = await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.NOVEDAD,
       valorOriginal: 150000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 10, // mora = 150000*0.03/30*10 = 1.500
+      diasVencida: 14,
     });
 
-    // Canon(400.000) + Novedad(150.000) + Mora(1.500), exacto, sin excedente.
+    // Canon(400.000) + Novedad(150.000), exacto, sin excedente.
     const recibo = await recaudo.registrarPago(
-      { contratoId: contrato.id, detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 551500 }] },
+      { contratoId: contrato.id, detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 550000 }] },
       'admin@test.com',
     );
 
     const reciboCompleto = await recaudo.obtener(recibo.id);
 
-    expect(reciboCompleto.aplicaciones).toHaveLength(3); // canon-capital, novedad-capital, novedad-mora
+    expect(reciboCompleto.aplicaciones).toHaveLength(2); // canon-capital, novedad-capital
 
     const aplicacionCanon = reciboCompleto.aplicaciones.find((a) => a.obligacion.id === canon.id);
     expect(aplicacionCanon).toBeDefined();
@@ -346,12 +464,88 @@ describe('RecaudoService (integración) — RECAUDO-03', () => {
     expect(Number(aplicacionCanon!.montoAplicado)).toBe(400000);
     expect(Number(aplicacionCanon!.saldoPosterior)).toBe(0); // canon quedó totalmente pagado
 
-    const aplicacionNovedadMora = reciboCompleto.aplicaciones.find(
-      (a) => a.obligacion.id === novedad.id && a.concepto === 'MORA',
+    const aplicacionNovedad = reciboCompleto.aplicaciones.find((a) => a.obligacion.id === novedad.id);
+    expect(aplicacionNovedad).toBeDefined();
+    expect(Number(aplicacionNovedad!.montoAplicado)).toBe(150000);
+    expect(Number(aplicacionNovedad!.saldoPosterior)).toBe(0); // novedad quedó totalmente pagada
+  });
+});
+
+/** Valida F18: el listado de deudores agrupa la cartera VENCIDA por contrato. */
+describe('RecaudoService (integración) — deudores', () => {
+  let testApp: TestApp;
+  let recaudo: RecaudoService;
+
+  beforeAll(async () => {
+    testApp = await bootstrapTestApp();
+    recaudo = testApp.app.get(RecaudoService);
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(async () => {
+    await limpiarBaseDeDatos(testApp.dataSource);
+  });
+
+  it('una fila por contrato con deuda vencida, con el total (capital) sumado; excluye el canon por vencer y filtra por búsqueda', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+
+    const clienteA = await crearCliente(testApp.dataSource, { nombreCompleto: 'Ana Pérez', numeroDocumento: '111' });
+    const inmuebleA = await crearInmueble(testApp.dataSource, { direccion: 'Calle 1', barrio: 'Centro' });
+    const contratoA = await crearContrato(testApp.dataSource, clienteA, inmuebleA, { canonValor: 400000 });
+    // Dos obligaciones vencidas del mismo contrato → una sola fila.
+    await crearObligacion(testApp.dataSource, contratoA, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 400000,
+      diasVencida: 4,
+    });
+    await crearObligacion(testApp.dataSource, contratoA, {
+      tipo: TipoObligacion.NOVEDAD,
+      valorOriginal: 100000,
+      diasVencida: 14,
+    });
+    // Canon por vencer del mismo contrato: NO debe sumar.
+    const en20 = new Date();
+    en20.setDate(en20.getDate() + 20);
+    await testApp.dataSource.getRepository(Obligacion).save(
+      testApp.dataSource.getRepository(Obligacion).create({
+        contrato: contratoA,
+        tipo: TipoObligacion.CANON,
+        concepto: 'Canon por vencer',
+        periodo: en20,
+        fechaVencimiento: en20,
+        valorOriginal: 400000,
+        estado: EstadoObligacion.PENDIENTE,
+      }),
     );
-    expect(aplicacionNovedadMora).toBeDefined();
-    expect(Number(aplicacionNovedadMora!.montoAplicado)).toBe(1500);
-    expect(Number(aplicacionNovedadMora!.saldoPosterior)).toBe(0); // mora quedó totalmente cobrada
+
+    const clienteB = await crearCliente(testApp.dataSource, { nombreCompleto: 'Beto Gómez', numeroDocumento: '222' });
+    const inmuebleB = await crearInmueble(testApp.dataSource);
+    const contratoB = await crearContrato(testApp.dataSource, clienteB, inmuebleB, { canonValor: 300000 });
+    await crearObligacion(testApp.dataSource, contratoB, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 300000,
+      diasVencida: 4,
+    });
+
+    const todos = await recaudo.deudores({});
+    expect(todos.total).toBe(2);
+
+    const filaA = todos.data.find((d) => d.contratoId === contratoA.id)!;
+    expect(filaA.obligacionesVencidas).toBe(2);
+    expect(filaA.totalCapitalVencido).toBe(500000); // 400.000 + 100.000 (el canon por vencer no)
+    expect(filaA.totalDeuda).toBe(500000);
+    expect(filaA.cliente.nombreCompleto).toBe('Ana Pérez');
+    expect(filaA.inmueble.barrio).toBe('Centro');
+
+    const soloAna = await recaudo.deudores({ busqueda: 'ana' });
+    expect(soloAna.total).toBe(1);
+    expect(soloAna.data[0].contratoId).toBe(contratoA.id);
+
+    const porDeuda = await recaudo.deudores({ orden: 'deuda_desc' });
+    expect(porDeuda.data[0].contratoId).toBe(contratoA.id); // 500.000 > 300.000
   });
 });
 
@@ -377,15 +571,31 @@ describe('RecaudoService (integración) — DEP-01', () => {
     await limpiarBaseDeDatos(testApp.dataSource);
   });
 
-  async function crearContratoTerminadoConDeposito(depositoCustodia: number) {
-    const cliente = await crearCliente(testApp.dataSource);
+  async function crearContratoTerminadoConDeposito(depositoGarantia: number, overridesCliente: Partial<Cliente> = {}) {
+    const cliente = await crearCliente(testApp.dataSource, overridesCliente);
     const inmueble = await crearInmueble(testApp.dataSource);
     return crearContrato(testApp.dataSource, cliente, inmueble, {
       estado: EstadoContrato.TERMINADO,
       fechaFin: new Date(),
-      depositoCustodia,
+      depositoGarantia,
     });
   }
+
+  it('el concepto del movimiento de devolución de depósito muestra el nombre del cliente, no su UUID', async () => {
+    const contrato = await crearContratoTerminadoConDeposito(500000, { nombreCompleto: 'Carlos Ruiz' });
+
+    await recaudo.liquidarDeposito(
+      contrato.id,
+      { descuentos: [], medioPago: MedioPago.TRANSFERENCIA, referencia: 'REF-1' },
+      'admin@test.com',
+    );
+
+    const movimiento = await testApp.dataSource
+      .getRepository(Movimiento)
+      .findOneOrFail({ where: { contratoId: contrato.id, origen: OrigenMovimiento.DEPOSITO } });
+    expect(movimiento.concepto).toContain('Carlos Ruiz');
+    expect(movimiento.concepto).not.toContain(contrato.id);
+  });
 
   it('persiste cada descuento con su propio concepto/valor y devuelve el neto por el medio indicado', async () => {
     const contrato = await crearContratoTerminadoConDeposito(1000000);
@@ -419,7 +629,7 @@ describe('RecaudoService (integración) — DEP-01', () => {
     expect(movimiento.referencia).toBe('REF-DEV-001');
 
     const contratoRecargado = await testApp.dataSource.getRepository(Contrato).findOneByOrFail({ id: contrato.id });
-    expect(Number(contratoRecargado.depositoCustodia)).toBe(0);
+    expect(Number(contratoRecargado.depositoGarantia)).toBe(0);
   });
 
   it('exige medio de pago cuando queda saldo por devolver', async () => {
@@ -428,6 +638,79 @@ describe('RecaudoService (integración) — DEP-01', () => {
     await expect(
       recaudo.liquidarDeposito(contrato.id, { descuentos: [{ concepto: 'Aseo', valor: 100000 }] }, 'admin@test.com'),
     ).rejects.toThrow('Debe indicar el medio de pago');
+  });
+
+  it('F13: un descuento tipo DEUDA abona la obligación real del contrato (no queda como cartera viva)', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, {
+      estado: EstadoContrato.TERMINADO,
+      fechaFin: new Date(),
+      depositoGarantia: 1000000,
+      canonValor: 500000,
+    });
+    const canon = await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 500000,
+      diasVencida: 4,
+    });
+
+    await recaudo.liquidarDeposito(
+      contrato.id,
+      {
+        descuentos: [
+          { concepto: 'Aseo general', valor: 100000 },
+          { concepto: 'Arriendo debido', valor: 300000, tipo: 'DEUDA' as any },
+        ],
+        medioPago: MedioPago.EFECTIVO,
+      },
+      'admin@test.com',
+    );
+
+    // El canon quedó abonado en 300.000 (PARCIAL).
+    const canonRecargado = await recargarObligacion(testApp.dataSource, canon.id);
+    expect(Number(canonRecargado.valorAbonado)).toBe(300000);
+    expect(canonRecargado.estado).toBe(EstadoObligacion.PARCIAL);
+
+    // Devolución = 1.000.000 - 100.000 - 300.000 = 600.000.
+    const movimiento = await testApp.dataSource
+      .getRepository(Movimiento)
+      .findOneOrFail({ where: { contratoId: contrato.id, origen: OrigenMovimiento.DEPOSITO } });
+    expect(Number(movimiento.monto)).toBe(600000);
+
+    // Se generó un recibo interno marcado esLiquidacionDeposito, sin movimiento de caja propio.
+    const reciboInterno = await testApp.dataSource
+      .getRepository(ReciboCaja)
+      .findOneOrFail({ where: { contrato: { id: contrato.id }, esLiquidacionDeposito: true } });
+    expect(Number(reciboInterno.valorTotal)).toBe(300000);
+  });
+
+  it('F13: rechaza un descuento tipo DEUDA que supera la deuda real del contrato', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, {
+      estado: EstadoContrato.TERMINADO,
+      fechaFin: new Date(),
+      depositoGarantia: 1000000,
+    });
+    await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 200000,
+      diasVencida: 4,
+    });
+
+    await expect(
+      recaudo.liquidarDeposito(
+        contrato.id,
+        {
+          descuentos: [{ concepto: 'Arriendo debido', valor: 500000, tipo: 'DEUDA' as any }],
+          medioPago: MedioPago.EFECTIVO,
+        },
+        'admin@test.com',
+      ),
+    ).rejects.toThrow('supera la deuda pendiente');
   });
 
   it('sin descuentos, devuelve el depósito completo sin crear ningún descuento', async () => {
@@ -493,26 +776,24 @@ describe('RecaudoService (integración) — simularPago == registrarPago', () =>
   });
 
   it('la previsualización no persiste nada y coincide exactamente con el recibo real', async () => {
-    await configurarEmpresa(testApp.dataSource, { diasGraciaMora: 5, porcentajeMoraMensual: 3 });
+    await configurarEmpresa(testApp.dataSource, {});
     const cliente = await crearCliente(testApp.dataSource);
     const inmueble = await crearInmueble(testApp.dataSource);
     const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
     const canon = await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.CANON,
       valorOriginal: 400000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 0,
+      diasVencida: 4,
     });
     await crearObligacion(testApp.dataSource, contrato, {
       tipo: TipoObligacion.NOVEDAD,
       valorOriginal: 150000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 10, // mora = 150000*0.03/30*10 = 1.500
+      diasVencida: 14,
     });
 
     const dto = {
       contratoId: contrato.id,
-      detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 552500 }], // Canon+Novedad+Mora+1000 excedente
+      detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 551000 }], // Canon(400k) + Novedad(150k) + 1.000 excedente
     } as RegistrarPagoDto;
 
     const simulacion = await recaudo.simularPago(dto);
@@ -531,9 +812,7 @@ describe('RecaudoService (integración) — simularPago == registrarPago', () =>
     expect(simulacion.aplicaciones).toHaveLength(reciboCompleto.aplicaciones.length);
 
     for (const aplicacionReal of reciboCompleto.aplicaciones) {
-      const aplicacionSimulada = simulacion.aplicaciones.find(
-        (a) => a.obligacionId === aplicacionReal.obligacion.id && a.concepto === aplicacionReal.concepto,
-      );
+      const aplicacionSimulada = simulacion.aplicaciones.find((a) => a.obligacionId === aplicacionReal.obligacion.id);
       expect(aplicacionSimulada).toBeDefined();
       expect(Number(aplicacionSimulada!.monto)).toBe(Number(aplicacionReal.montoAplicado));
       expect(Number(aplicacionSimulada!.saldoPosterior)).toBe(Number(aplicacionReal.saldoPosterior));
@@ -570,14 +849,12 @@ describe('RecaudoService (integración) — listar (módulo Recibos)', () => {
     await crearObligacion(testApp.dataSource, contratoA, {
       tipo: TipoObligacion.CANON,
       valorOriginal: 100000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 0,
+      diasVencida: 4,
     });
     await crearObligacion(testApp.dataSource, contratoB, {
       tipo: TipoObligacion.CANON,
       valorOriginal: 100000,
-      diasGraciaEmpresa: 5,
-      diasAtrasoDeseado: 0,
+      diasVencida: 4,
     });
 
     await recaudo.registrarPago(
@@ -635,13 +912,13 @@ describe('RecaudoService (integración) — depositosPendientes/depositosLiquida
     await limpiarBaseDeDatos(testApp.dataSource);
   });
 
-  async function crearContratoTerminadoConDeposito(depositoCustodia: number) {
+  async function crearContratoTerminadoConDeposito(depositoGarantia: number) {
     const cliente = await crearCliente(testApp.dataSource);
     const inmueble = await crearInmueble(testApp.dataSource);
     return crearContrato(testApp.dataSource, cliente, inmueble, {
       estado: EstadoContrato.TERMINADO,
       fechaFin: new Date(),
-      depositoCustodia,
+      depositoGarantia,
     });
   }
 
@@ -653,7 +930,7 @@ describe('RecaudoService (integración) — depositosPendientes/depositosLiquida
     const cliente = await crearCliente(testApp.dataSource);
     const inmueble = await crearInmueble(testApp.dataSource);
     // ACTIVO con depósito: no está pendiente de liquidar todavía (no aplica hasta terminar).
-    await crearContrato(testApp.dataSource, cliente, inmueble, { depositoCustodia: 400000 });
+    await crearContrato(testApp.dataSource, cliente, inmueble, { depositoGarantia: 400000 });
 
     const resultado = await recaudo.depositosPendientes();
     expect(resultado.total).toBe(1);
@@ -680,5 +957,72 @@ describe('RecaudoService (integración) — depositosPendientes/depositosLiquida
 
     const filaB = resultado.data.find((c) => c.id === contratoB.id)!;
     expect(filaB.descuentos).toHaveLength(0);
+  });
+});
+
+/**
+ * Valida el hallazgo B1 de la auditoría contable 2026-09-01: `contrato.saldoAFavor` es siempre
+ * el reflejo exacto de `SUM(saldo_favor_credito.montoDisponible)` — antes lo mantenían dos
+ * estrategias divergentes (asignación en `registrarPago`, delta en `anular`) que podían dejarlo
+ * desalineado del ledger.
+ */
+describe('RecaudoService (integración) — B1: saldoAFavor == SUM(montoDisponible)', () => {
+  let testApp: TestApp;
+  let recaudo: RecaudoService;
+
+  beforeAll(async () => {
+    testApp = await bootstrapTestApp();
+    recaudo = testApp.app.get(RecaudoService);
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(async () => {
+    await limpiarBaseDeDatos(testApp.dataSource);
+  });
+
+  async function sumaCreditos(contratoId: string): Promise<number> {
+    const { total } = await testApp.dataSource
+      .getRepository(SaldoFavorCredito)
+      .createQueryBuilder('sf')
+      .select('COALESCE(SUM(sf.montoDisponible), 0)', 'total')
+      .where('sf.contratoId = :contratoId', { contratoId })
+      .andWhere('sf.montoDisponible > 0')
+      .getRawOne();
+    return Number(total);
+  }
+
+  it('tras registrarPago + anular encadenados, el espejo y el ledger coinciden en cada paso', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, { canonValor: 400000 });
+    await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 400000,
+      diasVencida: 4,
+    });
+
+    const leerEspejo = async () =>
+      Number((await testApp.dataSource.getRepository(Contrato).findOneByOrFail({ id: contrato.id })).saldoAFavor);
+
+    // Paga 400.000 al canon + 130.000 de excedente dejado como saldo a favor.
+    const recibo = await recaudo.registrarPago(
+      {
+        contratoId: contrato.id,
+        detallesPago: [{ medioPago: MedioPago.EFECTIVO, monto: 530000 }],
+        dejarExcedenteComoSaldoFavor: true,
+      },
+      'admin@test.com',
+    );
+    expect(await leerEspejo()).toBe(130000);
+    expect(await leerEspejo()).toBe(await sumaCreditos(contrato.id));
+
+    // Anular: el pago se revierte completo, el crédito por excedente también.
+    await recaudo.anular(recibo.id, { motivo: 'error' }, 'admin@test.com');
+    expect(await leerEspejo()).toBe(0);
+    expect(await leerEspejo()).toBe(await sumaCreditos(contrato.id));
   });
 });

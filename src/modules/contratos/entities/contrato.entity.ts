@@ -52,7 +52,7 @@ export class Contrato {
   @Column({ type: 'date' })
   fechaInicio: Date;
 
-  /** NULL mientras el contrato esté activo. Se define solo al terminar/suspender. */
+  /** NULL mientras el contrato esté activo. Se define solo al terminar. */
   @Column({ type: 'date', nullable: true })
   fechaFin: Date | null;
 
@@ -66,13 +66,13 @@ export class Contrato {
   saldoAFavor: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-  depositoCustodia: number;
+  depositoGarantia: number;
 
   /**
-   * Marca cuándo se liquidó el depósito en custodia de este contrato (NULL mientras no se
+   * Marca cuándo se liquidó el depósito de garantía de este contrato (NULL mientras no se
    * haya liquidado). `RecaudoService.liquidarDeposito` la usa como guardia de idempotencia:
    * antes, una segunda llamada sobre el mismo contrato ya terminado no duplicaba el pago
-   * (`depositoCustodia` queda en 0 tras la primera liquidación, así que `valorDevolucion`
+   * (`depositoGarantia` queda en 0 tras la primera liquidación, así que `valorDevolucion`
    * calcula 0 en la segunda), pero sí insertaba filas `DescuentoDeposito` duplicadas con
    * efecto cero si se reenviaban descuentos, contaminando ese rastro de auditoría.
    */

@@ -5,8 +5,7 @@ import { Rol } from '../../common/enums/roles.enum';
 import { bootstrapTestApp, limpiarBaseDeDatos, TestApp } from '../../../test/test-app';
 
 /**
- * Valida los flujos centrales de sesión: login, refresh (con rotación) y logout — el módulo
- * `auth` solo tenía cobertura de `registroInicial()`; este archivo cubre el resto.
+ * Valida los flujos centrales de sesión: login, refresh (con rotación) y logout.
  */
 describe('AuthService (integración) — login / refresh / logout', () => {
   let testApp: TestApp;
@@ -69,6 +68,16 @@ describe('AuthService (integración) — login / refresh / logout', () => {
       await expect(authService.login({ email: 'inactivo@tamarasaenz.com', password: 'Password#123' })).rejects.toThrow(
         'Credenciales inválidas.',
       );
+    });
+
+    it('el refresh token de un login expira a ~1 día (BE-006: sesión de login diario)', async () => {
+      await crearUsuarioActivo({ email: 'ok@tamarasaenz.com' });
+      await authService.login({ email: 'ok@tamarasaenz.com', password: 'Password#123' });
+
+      const [registro] = await testApp.dataSource.getRepository(RefreshToken).find();
+      const horas = (registro.expiraEn.getTime() - Date.now()) / (60 * 60 * 1000);
+      expect(horas).toBeGreaterThan(23);
+      expect(horas).toBeLessThan(25);
     });
   });
 
