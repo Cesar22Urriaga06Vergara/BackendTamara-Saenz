@@ -7,7 +7,7 @@ de esa ronda, más lo que el dueño pidió después (sesión de 1 día).
 Cada ejecutor: lee el plan completo antes de empezar, respeta sus STOP conditions, actualiza tu
 fila al terminar. Los planes son auto-contenidos (no asumen contexto de la sesión que los generó).
 
-**Planned against commit**: `0506b3d` (rama `correccion-hallazgos-auditoria`).
+**Planned against commit**: `0506b3d` (planes 001–011, ronda 2) · `a9c242c` (planes 012–014, ronda 3).
 
 ## Orden de ejecución y estado
 
@@ -39,6 +39,56 @@ archivos distintos). El orden numérico es solo por prioridad/leverage.
 - **001** (errores 503) tiene un follow-up en el frontend: que `useApiFetch` reintente ante un
   503. El plan 004 del frontend ya deja `esFalloDeRed` contemplando 502/503/504 — al mergear 001
   eso ya funciona.
+
+---
+
+## Ronda 3 — auditoría 2026-09-05 (primera tanda: seguridad y configuración)
+
+Generados por `improve` tras la auditoría exhaustiva de las 4 dimensiones (arquitectura,
+seguridad/config, rendimiento, consistencia de datos). Esta primera tanda es la "limpia": solo
+seguridad/config, esfuerzo S–M, riesgo LOW–MED, **sin decisiones de negocio de por medio**.
+
+| Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |
+|------|--------|-----------|----------|--------|------------|--------|
+| 012 | **PASO 0** — Merge de las ramas de corrección a `main` + verificación baseline (cross-repo) | P0 | S | MED | — | **TODO** |
+| 013 | Endurecimiento de secretos JWT, contraseñas semilla y modo de arranque (S-1, S-2, S-7) | P1 | S | LOW (cód.) / MED (rotación) | 012 | **TODO** |
+| 014 | Remediación de dependencias vulnerables del backend — `npm audit`, `bcrypt`→`bcryptjs` (S-3) | P1 | S–M | LOW–MED | 012 | **TODO** |
+
+Hallazgos cubiertos: **S-1** secretos JWT débiles · **S-2** contraseñas semilla predecibles y
+publicadas en `.env.example` · **S-3** 6 vulnerabilidades de deps (1 crítica `tar`, nunca
+escaneadas) · **S-7** `NODE_ENV=development` → Swagger expuesto.
+
+Emparejamiento con el frontend (rama coordinada): plan **012** cubre el merge de **ambos** repos;
+plan BE-**014** empareja con FE-**014** (misma higiene de dependencias, desplegar juntos).
+
+### Notas de dependencia (ronda 3)
+
+- **012 es el paso 0**: 013 y 014 se ramifican desde `main` ya mergeado. Si el merge se pospone,
+  ambos indican que pueden ejecutarse sobre `correccion-hallazgos-auditoria`.
+- **013 y 014 son independientes entre sí** (tocan archivos distintos: 013 → `main.ts` /
+  `.env.example` / `seed.ts` / `README.md`; 014 → `package.json` / `auth.service.ts` /
+  `usuarios.service.ts` / imports).
+- **013** invalida todas las sesiones al rotar `JWT_ACCESS_SECRET` — coordinar ventana de re-login.
+
+### Hallazgos de la ronda 3 NO incluidos en esta tanda (para no re-auditar)
+
+Reales, aplazados por acotación explícita a "tanda limpia de seguridad". Ver el informe de
+auditoría completo para evidencia:
+
+| Hallazgo | Sev | Por qué no ahora |
+|---|---|---|
+| **S-6** `useApiFetch` reintenta POSTs no idempotentes → doble cobro | MED-HIGH | Es del **frontend** — plan FE-015 (misma tanda). |
+| **S-5** `pages/login.vue` filtra credenciales por GET pre-hidratación | MED | Es del **frontend** — plan FE-016 (misma tanda). |
+| **A-5** `exceljs`/`file-saver` muertos en el FE | S | Frontend — plan FE-014. |
+| **S-8** Access token de 8 h, no revocable | LOW-MED | Bajar `JWT_ACCESS_EXPIRES_IN` a 15-30 min. Muy relacionado con 013; se hará justo después (mencionado en las Notas de mantenimiento de 013). |
+| **S-10** Refresh token sin detección de reuso ni limpieza de filas revocadas | LOW | Plan propio (M). |
+| **S-11** CI del FE inexistente; `npm audit` no está en CI | MED | Parcialmente en 012 (Paso 7 opcional, CI mínimo FE) y en 014 (Paso 4, `npm audit` en CI BE). El resto, plan propio. |
+| **S-12** `AGENTS.md` + docs de negocio fuera de git (`.gitignore` `**/*.md` demasiado amplio) | LOW-MED | S, sin riesgo; se puede plegar en cualquier plan que toque `.gitignore` o hacer uno pequeño. |
+| **D-1 / D-4** Dinero `decimal` → string en JSON; sin transformer decimal↔number | MED | El fix keystone de consistencia de datos. Riesgo MED (toca todo cálculo financiero). Plan propio, siguiente tanda. |
+| **P-1** `generarCanonesMensuales` O(contratos×meses) queries diarias | LOW-MED | Rendimiento; volumen bajo hoy. Plan propio. |
+| **P-4** Índices compuestos faltantes (`obligacion(estado,fechaVencimiento)`, `recibo_caja.creadoEn`, `movimiento(medioPago,tipo,esReverso)`) | LOW | Verificar con `EXPLAIN` primero. Plan propio con migración. |
+| **Observabilidad**: logging sin estructura ni correlation IDs | MED | Plan propio. |
+| **A-1 / D-2** Cliente OpenAPI generado / tipos compartidos | MED | Ya estaba en "NO planeados" de la ronda 2. Proyecto en sí. |
 
 ## Hallazgos considerados y NO planeados en esta tanda
 
