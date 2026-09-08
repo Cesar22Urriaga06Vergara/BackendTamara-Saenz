@@ -46,7 +46,8 @@ SKILL.MD
 # Forzar exclusión de otros .md generados por IA en subcarpetas
 **/*.md
 
-# EXCEPCIONES: Permitir siempre el README de desarrollo
+# EXCEPCIONES: docs de proyecto que SÍ se versionan
 !README.md
+!PRODUCCION.md
 
 node_modules
