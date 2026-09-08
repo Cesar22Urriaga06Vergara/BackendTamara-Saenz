@@ -64,7 +64,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 
 | Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |
 |------|--------|-----------|----------|--------|------------|--------|
-| 015 | Configurar el despliegue del backend en Railway (Dockerfile, `railway.json`, `engines`, matriz de env) | P1 | M | LOW | — | **TODO** |
+| 015 | Configurar el despliegue del backend en Railway (Dockerfile, `railway.json`, `engines`, matriz de env) | P1 | M | LOW | — | **DONE** (2026-09-08) |
 | 016 | Verificar y asegurar la compatibilidad con MySQL 8 (Railway) | P1 | M | MED | — | **DONE** (2026-09-08) — 25 migraciones + 188 tests verde en MySQL 8.4.11; `type:'mysql'`; CI → `mysql:8.4` |
 | 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **TODO** |
 | 018 | Endpoint `/health` (`@nestjs/terminus`) + endurecer la CSP | P1 | S | LOW | — | **TODO** |
@@ -88,9 +88,28 @@ Verificado contra **MySQL 8.4.11** real (zip portable, sin Docker) en el puerto 
 - **DEV local ahora necesita MySQL 8** en `localhost:3306` para `npm test` (antes MariaDB de XAMPP).
   El CI ya usa `mysql:8.4`.
 
+### Ejecución de 015 (2026-09-08, rama `deploy/015-railway-backend`)
+
+- **`tsconfig.build.json`** nuevo (`rootDir: src`, `incremental: false`, excluye `test`/specs): `nest build`
+  ahora emite `dist/main.js` limpio (antes `dist/src/main.js` — `start:prod` estaba roto sin que nadie
+  lo notara) y de forma **determinista** (el `incremental: true` heredado producía `dist/` parciales
+  en rebuilds).
+- **`Dockerfile`** multi-stage (`node:20-slim`), **`.dockerignore`**, **`railway.json`**
+  (`startCommand: "npm run deploy:migrate && node dist/main"`, healthcheck `/api/v1/health`), **`.nvmrc`** = `20`.
+- `package.json`: `engines` (`>=20 <21`), script `deploy:migrate` (`typeorm migration:run -d dist/database/data-source.js`
+  — CLI sin ts-node, funciona con `--omit=dev`), `dotenv` movido a `dependencies` (lo importa `data-source.ts`).
+- `src/main.ts`: `app.listen(port)` → `app.listen(port, '0.0.0.0')` (contenedor).
+- README: sección "Despliegue (Railway)" con la matriz completa de variables.
+- **No verificado localmente**: `docker build` (no hay Docker en la máquina). Sí verificado: `npm ci`
+  + build (determinista, 28 archivos clave), `npm ci --omit=dev` + `node dist/main` (arranca, falla solo
+  en conexión BD), `deploy:migrate` (carga el data-source compilado). `npm audit` 0.
+- **La suite de tests no se ve afectada** (jest usa `tsconfig.json`; `main.ts` bootstrap no corre en tests).
+  El CI (mysql:8.4) lo confirma.
+- **Pendiente**: `railway.json` apunta a `/api/v1/health` — ese endpoint es el **plan 018**.
+
 ### Orden y dependencias (ronda 4)
 
-- ~~**016 primero**~~ **HECHO.** El resto puede avanzar.
+- ~~**016 primero**~~ · ~~**015**~~ **HECHOS.** Sigue: 017/018 + FE-017.
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021

@@ -96,7 +96,9 @@ async function bootstrap() {
   }
 
   const port = config.get<number>('PORT', 3010);
-  await app.listen(port);
+  // '0.0.0.0' explícito: en un contenedor (Railway) hay que escuchar en todas las interfaces,
+  // no solo en localhost, para que el proxy del proveedor pueda enrutar el tráfico.
+  await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 API Tamara & Saenz corriendo en http://localhost:${port}/${prefix}`);
   if (swaggerHabilitado) {

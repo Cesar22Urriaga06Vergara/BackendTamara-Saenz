@@ -125,6 +125,59 @@ Swagger (solo con `SWAGGER_ENABLED=true`): `http://localhost:3010/api/v1/docs`
   (`JWT_REFRESH_EXPIRES_IN=1d`) y la resiliencia de sesión del frontend, un access token corto no
   molesta al usuario y reduce a minutos la ventana de un token filtrado.
 
+## Despliegue (Railway)
+
+El backend se despliega en **Railway** como servicio Docker (`Dockerfile` multi-stage +
+`railway.json`), con el plugin **MySQL** de Railway (MySQL 8) como base de datos. `nest build` usa
+`tsconfig.build.json` y emite `dist/main.js`; `start:prod` = `node dist/main`.
+
+### Variables de entorno del servicio (Railway → Variables)
+
+| Variable | Valor | Nota |
+|---|---|---|
+| `NODE_ENV` | `production` | |
+| `PORT` | *(lo inyecta Railway)* | no la definas a mano |
+| `API_PREFIX` | `api` | |
+| `TZ` | `America/Bogota` | crítico para cartera/mora — pendiente plan 022 |
+| `TRUST_PROXY` | `true` | Railway está detrás de proxy |
+| `CORS_ORIGIN` | `https://<dominio-frontend>` | dominio exacto de Cloudflare Pages, sin barra final |
+| `SWAGGER_ENABLED` | *(no definir)* | Swagger apagado en prod |
+| `JWT_ACCESS_SECRET` | *(64 hex aleatorio)* | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `JWT_ACCESS_EXPIRES_IN` | `15m` | |
+| `JWT_REFRESH_EXPIRES_IN` | `1d` | |
+| `DB_HOST` | `${{MySQL.MYSQLHOST}}` | referencia al plugin MySQL |
+| `DB_PORT` | `${{MySQL.MYSQLPORT}}` | |
+| `DB_USERNAME` | `${{MySQL.MYSQLUSER}}` | |
+| `DB_PASSWORD` | `${{MySQL.MYSQLPASSWORD}}` | |
+| `DB_DATABASE` | `${{MySQL.MYSQLDATABASE}}` | |
+| `DB_SYNCHRONIZE` | `false` | producción usa migraciones |
+| `DB_LOGGING` | `false` | |
+| `EMPRESA_NOMBRE` / `EMPRESA_NIT` / `EMPRESA_SLOGAN` | *(datos reales)* | solo se usan en el primer seed |
+| `HORIZONTE_MESES_CANON` | `3` | |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(email real + contraseña fuerte)* | **quitar tras el primer seed** |
+| `SEED_RECEPCION_EMAIL` / `SEED_RECEPCION_PASSWORD` | *(idem)* | idem |
+
+### Migraciones
+
+`railway.json` usa `startCommand: "npm run deploy:migrate && node dist/main"` — las migraciones se
+corren en cada arranque (idempotente: TypeORM salta las ya aplicadas). `deploy:migrate` usa el CLI
+de `typeorm` sobre el `dist/database/data-source.js` compilado (sin ts-node, funciona con
+`--omit=dev`).
+
+### Primer despliegue
+
+1. Conectar el repo a Railway; builder = `Dockerfile`.
+2. Añadir el plugin **MySQL** (confirmar que es MySQL 8; compat verificada en el plan 016).
+3. Cargar las variables de arriba.
+4. El primer deploy corre las migraciones vía `startCommand`. Para sembrar los usuarios iniciales,
+   una vez: en el shell del servicio, `node dist/database/seeds/seed.js`
+   (o apuntar `DB_*` de una máquina local a la BD de Railway y `npm run seed`).
+5. Quitar las variables `SEED_*_PASSWORD`.
+6. `GET https://<servicio>.up.railway.app/api/v1/health` → 200. **Requiere el plan 018**
+   (endpoint `/health`); hasta entonces, quitar las líneas `healthcheck*` de `railway.json` o
+   Railway marcará el deploy como no sano.
+7. En el frontend (Cloudflare) y en `CORS_ORIGIN` del backend, cablear los dominios reales.
+
 ## Separación de responsabilidades: Recepcionista (operativo) vs Administrador (contable)
 
 **Regla de negocio confirmada 2026-08-18** (reemplaza cualquier afirmación previa de este README
