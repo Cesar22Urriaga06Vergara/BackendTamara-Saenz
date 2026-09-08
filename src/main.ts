@@ -4,11 +4,11 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
-import { join } from 'path';
 import { AppModule } from './app.module';
 import { SanitizarHtmlPipe } from './common/pipes/sanitizar-html.pipe';
 import { TypeOrmExceptionFilter } from './common/filters/typeorm-exception.filter';
 import { validarSecretoJwt } from './common/utils/validar-secreto-jwt.util';
+import { directorioUploads, PREFIJO_PUBLICO_UPLOADS } from './common/utils/rutas-archivos.util';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -55,7 +55,7 @@ async function bootstrap() {
     app.set('trust proxy', false);
   }
 
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
+  app.useStaticAssets(directorioUploads(), { prefix: PREFIJO_PUBLICO_UPLOADS });
 
   app.useGlobalFilters(new TypeOrmExceptionFilter());
 

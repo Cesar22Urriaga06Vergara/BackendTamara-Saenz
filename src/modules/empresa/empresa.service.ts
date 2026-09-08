@@ -2,11 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { promises as fs } from 'fs';
-import { join } from 'path';
 import { Empresa } from './entities/empresa.entity';
 import { UpdateEmpresaDto } from './dto/update-empresa.dto';
-
-const PREFIJO_LOGO_PUBLICO = '/uploads/empresa/';
+import {
+  PREFIJO_PUBLICO_LOGO as PREFIJO_LOGO_PUBLICO,
+  rutaFisicaDesdeUrlPublica,
+} from '../../common/utils/rutas-archivos.util';
 
 /** Valores con los que arranca la fila única de Empresa cuando la base de datos está en blanco. */
 function valoresPorDefecto(): Partial<Empresa> {
@@ -68,7 +69,7 @@ export class EmpresaService {
     const guardada = await this.repo.save(empresa);
 
     if (logoAnterior?.startsWith(PREFIJO_LOGO_PUBLICO)) {
-      await fs.unlink(join(process.cwd(), logoAnterior)).catch(() => undefined);
+      await fs.unlink(rutaFisicaDesdeUrlPublica(logoAnterior)).catch(() => undefined);
     }
 
     return guardada;

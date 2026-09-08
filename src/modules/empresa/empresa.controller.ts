@@ -11,8 +11,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { directorioLogos } from '../../common/utils/rutas-archivos.util';
 
-const CARPETA_LOGOS = './uploads/empresa';
 // SVG deliberadamente excluido: es un formato ejecutable (puede embeber <script>) y este
 // archivo se sirve luego desde una ruta estática sin autenticación (`/uploads/`, ver
 // `main.ts`) — aceptarlo habilitaría XSS almacenado sobre cualquier visitante que abra el
@@ -63,8 +63,9 @@ export class EmpresaController {
     FileInterceptor('archivo', {
       storage: diskStorage({
         destination: (_req, _file, cb) => {
-          mkdirSync(CARPETA_LOGOS, { recursive: true });
-          cb(null, CARPETA_LOGOS);
+          const carpeta = directorioLogos();
+          mkdirSync(carpeta, { recursive: true });
+          cb(null, carpeta);
         },
         filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname)}`),
       }),
