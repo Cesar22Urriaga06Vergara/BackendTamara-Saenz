@@ -164,6 +164,16 @@ corren en cada arranque (idempotente: TypeORM salta las ya aplicadas). `deploy:m
 de `typeorm` sobre el `dist/database/data-source.js` compilado (sin ts-node, funciona con
 `--omit=dev`).
 
+### Volumen de uploads (logo de empresa)
+
+El logo subido desde `/configuracion` se guarda en disco. El FS del contenedor de Railway es
+**efímero** — sin un Volume, el logo desaparece en cada deploy (de la UI y de todos los PDF).
+
+1. Railway → el servicio → **Volumes** → New Volume, mountPath p. ej. `/data`.
+2. Añadir la variable `UPLOADS_DIR=/data/uploads`.
+
+En local, `UPLOADS_DIR` vacío → se usa `<repo>/uploads` (comportamiento de siempre).
+
 ### Primer despliegue
 
 1. Conectar el repo a Railway; builder = `Dockerfile`.

@@ -66,7 +66,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 |------|--------|-----------|----------|--------|------------|--------|
 | 015 | Configurar el despliegue del backend en Railway (Dockerfile, `railway.json`, `engines`, matriz de env) | P1 | M | LOW | — | **DONE** (2026-09-08) |
 | 016 | Verificar y asegurar la compatibilidad con MySQL 8 (Railway) | P1 | M | MED | — | **DONE** (2026-09-08) — 25 migraciones + 188 tests verde en MySQL 8.4.11; `type:'mysql'`; CI → `mysql:8.4` |
-| 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **TODO** |
+| 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **DONE** (2026-09-08) |
 | 018 | Endpoint `/health` (`@nestjs/terminus`) + endurecer la CSP | P1 | S | LOW | — | **TODO** |
 | 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **TODO** |
 | 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **TODO** |
@@ -107,9 +107,21 @@ Verificado contra **MySQL 8.4.11** real (zip portable, sin Docker) en el puerto 
   El CI (mysql:8.4) lo confirma.
 - **Pendiente**: `railway.json` apunta a `/api/v1/health` — ese endpoint es el **plan 018**.
 
+### Ejecución de 017 (2026-09-08, rama `fix/017-logo-volumen`)
+
+- Nuevo `src/common/utils/rutas-archivos.util.ts` (+ spec, 5 casos): `directorioUploads()` lee
+  `UPLOADS_DIR` (o `<repo>/uploads`), `directorioLogos()`, `rutaFisicaDesdeUrlPublica()`.
+- Consumidores cambiados a la resolución centralizada: `empresa.controller.ts` (`diskStorage`),
+  `empresa.service.ts` (unlink del logo anterior), `main.ts` (`useStaticAssets`),
+  `pdf-recibo.service.ts` **y `pdf-novedad.service.ts`** (el plan solo listaba recibo — novedad
+  también incrusta el logo con el mismo `join(process.cwd(), logoUrl)`).
+- `grep "process.cwd()|'./uploads" src/` en los archivos tocados → limpio.
+- `.env.example` + README ("Volumen de uploads"): variable `UPLOADS_DIR`.
+- **Operativo pendiente**: Railway Volume + `UPLOADS_DIR=/data/uploads`.
+
 ### Orden y dependencias (ronda 4)
 
-- ~~**016 primero**~~ · ~~**015**~~ **HECHOS.** Sigue: 017/018 + FE-017.
+- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ **HECHOS.** Sigue: 018 (+ FE-017).
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021

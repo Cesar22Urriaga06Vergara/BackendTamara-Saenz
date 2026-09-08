@@ -38,13 +38,14 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 - [x] CI (`.github/workflows/ci.yml`) cambiado de `mariadb:10.11` a `mysql:8.4`.
 - [ ] Verificar el `date` de `obligacion.periodo` / "día calendario" en producción — cubierto por el **plan 022** (zona horaria).
 
-### DB-2 — Almacenamiento del logo de empresa (FS efímero en Railway)
-`empresa.controller.ts` guarda el logo en `./uploads/empresa` con `diskStorage`; `main.ts:58` lo
-sirve como estático. En Railway ese directorio **se borra en cada redeploy** → el logo desaparece
-de la UI y de **todos los PDF de recibo** (`pdf-recibo.service.ts:58`).
-- [ ] Opción A: **Railway Volume** montado en `/uploads` (más simple, 1 archivo)
-- [ ] Opción B: subir a **Cloudflare R2** / S3 y guardar la URL absoluta en `empresa.logoUrl`
-- [ ] Ajustar `pdf-recibo.service.ts` para resolver la ruta física / URL nueva
+### DB-2 — Almacenamiento del logo de empresa (FS efímero en Railway) — ✅ HECHO (plan 017, 2026-09-08)
+- [x] Todas las rutas de uploads pasan por `src/common/utils/rutas-archivos.util.ts`
+  (`directorioUploads()` = `UPLOADS_DIR` o `<repo>/uploads`). Tocado: `empresa.controller.ts`,
+  `empresa.service.ts`, `main.ts`, `pdf-recibo.service.ts`, **`pdf-novedad.service.ts`** (este
+  último no estaba en el plan original — también incrusta el logo).
+- [x] Nueva variable `UPLOADS_DIR` documentada en `.env.example` y el README.
+- [ ] **Operativo**: crear un Railway Volume (mountPath `/data`) y setear `UPLOADS_DIR=/data/uploads`.
+  Sin eso, el logo se sigue perdiendo en cada deploy.
 
 ### DEPLOY-1 — Configuración de plataforma
 - [x] **Backend Railway** — `Dockerfile` multi-stage + `railway.json` (`startCommand`, `healthcheckPath`, restart policy) + `tsconfig.build.json` (build determinista, `dist/main.js`) + `engines` + `.nvmrc` + script `deploy:migrate` + `app.listen(port, '0.0.0.0')` + matriz de variables en el README. **→ plan 015 (hecho, 2026-09-08)**. Verificado: `npm ci` + build + `npm ci --omit=dev` + `node dist/main` + `deploy:migrate` cargan bien.

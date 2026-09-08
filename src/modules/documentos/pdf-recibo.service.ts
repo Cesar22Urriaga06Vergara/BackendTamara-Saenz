@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import * as PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
-import { join } from 'path';
 import { EstadoRecibo, ReciboCaja } from '../recaudo/entities/recibo-caja.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
+import { rutaFisicaDesdeUrlPublica } from '../../common/utils/rutas-archivos.util';
 
 /** Paleta compartida con `PdfNovedadService` — mismos nombres, mismos valores, un solo lugar de verdad visual. */
 const COLOR_TEXTO = '#1A1A1A';
@@ -55,11 +55,11 @@ export class PdfReciboService {
       doc.on('error', reject);
 
       // ---- Logo (si el Administrador ya subió uno desde Configuración) ----
-      // logoUrl guarda la ruta pública ("/uploads/empresa/<archivo>"); la ruta física en
-      // disco es esa misma ruta resuelta contra la raíz del proyecto (ver EmpresaService).
+      // logoUrl guarda la ruta pública ("/uploads/empresa/<archivo>"); la ruta física se resuelve
+      // contra UPLOADS_DIR (Volume de Railway) o <repo>/uploads en local (ver rutas-archivos.util).
       let yTrasLogo = doc.y;
       if (empresa.logoUrl) {
-        const rutaFisicaLogo = join(process.cwd(), empresa.logoUrl);
+        const rutaFisicaLogo = rutaFisicaDesdeUrlPublica(empresa.logoUrl);
         if (existsSync(rutaFisicaLogo)) {
           // Tamaño base +25% respecto al anterior (90x64 -> 112x80, misma relación de aspecto vía
           // `fit`), escalado además por `espaciado.escala` en Media Carta — antes el logo NO se

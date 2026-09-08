@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import * as PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
-import { join } from 'path';
 import { EstadoNovedad, Novedad } from '../novedades/entities/novedad.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
 import { fechaLocalDesdeString } from '../../common/utils/fecha.util';
+import { rutaFisicaDesdeUrlPublica } from '../../common/utils/rutas-archivos.util';
 
 const COLOR_TEXTO = '#1A1A1A';
 const COLOR_GRIS = '#4A4D52';
@@ -69,7 +69,7 @@ export class PdfNovedadService {
       // ---- Logo + encabezado corporativo (mismo patrón de PdfReciboService) ----
       let yTrasLogo = doc.y;
       if (empresa.logoUrl) {
-        const rutaFisicaLogo = join(process.cwd(), empresa.logoUrl);
+        const rutaFisicaLogo = rutaFisicaDesdeUrlPublica(empresa.logoUrl);
         if (existsSync(rutaFisicaLogo)) {
           // Mismo tamaño base que PdfReciboService (112x80, +25% respecto al anterior 90x64) —
           // este documento no tiene variante Media Carta, no hace falta escalar.
