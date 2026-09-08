@@ -11,16 +11,17 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      mariadb:
-        image: mariadb:10.11
+      # MySQL 8 — el motor real de producción (Railway). El CI debe testear contra el
+      # mismo dialecto que se despliega (ver plan BE-016).
+      mysql:
+        image: mysql:8.4
         env:
-          MARIADB_ROOT_PASSWORD: ""
-          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "yes"
-          MARIADB_DATABASE: tamara_saenz_db_test
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: tamara_saenz_db_test
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -50,8 +51,8 @@ jobs:
       # No hace falta declarar variables DB_*/JWT_*/etc. aquí: `test/jest.setup.ts` carga
       # `.env.test` (ya commiteado, con `DB_HOST=localhost`) con `override: true` antes de
       # que arranque cualquier test, y el runner de GitHub Actions accede al servicio
-      # `mariadb` de arriba precisamente en `localhost:3306` (mapeo de puertos del job, no
+      # `mysql` de arriba precisamente en `localhost:3306` (mapeo de puertos del job, no
       # una red Docker aparte) — el mismo archivo que ya usan los desarrolladores en local
       # funciona sin cambios en CI.
-      - name: Tests de integración (contra MariaDB real del servicio)
+      - name: Tests de integración (contra MySQL 8 real del servicio)
         run: npm test

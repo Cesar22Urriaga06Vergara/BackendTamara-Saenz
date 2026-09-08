@@ -31,13 +31,11 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        // El servidor real es MariaDB, no MySQL (confirmado: 10.4.x) — declarar el tipo
-        // correcto importa más allá de lo cosmético: TypeORM genera SQL distinto para
-        // columnas GENERATED ALWAYS AS (...) según el dialecto (MariaDB no acepta el
-        // modificador NULL/NOT NULL después de STORED, MySQL sí lo exige); con
-        // type: 'mysql' contra un servidor MariaDB, `synchronize`/migraciones que usen
-        // columnas generadas fallan con error de sintaxis (ver CONC-01).
-        type: 'mariadb',
+        // El servidor real es MySQL 8 (Railway). TypeORM genera SQL ligeramente distinto para
+        // columnas GENERATED ALWAYS AS (...) según el dialecto — las migraciones ya están
+        // escritas MySQL-8-compatible (CAST(... AS CHAR), no DATE_FORMAT; ver CONC-01). Verificado
+        // 2026-09-08: las 25 migraciones + los 188 tests corren limpio contra MySQL 8.4.11 (BE-016).
+        type: 'mysql',
         host: cfg.get('DB_HOST'),
         port: cfg.get<number>('DB_PORT'),
         username: cfg.get('DB_USERNAME'),

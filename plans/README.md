@@ -65,7 +65,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 | Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |
 |------|--------|-----------|----------|--------|------------|--------|
 | 015 | Configurar el despliegue del backend en Railway (Dockerfile, `railway.json`, `engines`, matriz de env) | P1 | M | LOW | — | **TODO** |
-| 016 | Verificar y asegurar la compatibilidad con MySQL 8 (Railway) | P1 | M | MED | — | **TODO** |
+| 016 | Verificar y asegurar la compatibilidad con MySQL 8 (Railway) | P1 | M | MED | — | **DONE** (2026-09-08) — 25 migraciones + 188 tests verde en MySQL 8.4.11; `type:'mysql'`; CI → `mysql:8.4` |
 | 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **TODO** |
 | 018 | Endpoint `/health` (`@nestjs/terminus`) + endurecer la CSP | P1 | S | LOW | — | **TODO** |
 | 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **TODO** |
@@ -73,9 +73,24 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 | 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **TODO** |
 | 022 | Fijar zona horaria (app + conexión BD) y blindar el manejo de fechas (DATA-2) | P1 | M | MED | — | **TODO** |
 
+### Ejecución de 016 (2026-09-08, rama `migration/016-mysql8-compat`)
+
+Verificado contra **MySQL 8.4.11** real (zip portable, sin Docker) en el puerto 3307:
+- Las **25 migraciones** corren limpio con `type:'mariadb'` Y con `type:'mysql'` — no hubo que
+  tocar ninguna. Las 2 con columnas `GENERATED ... STORED` (`obligacion.claveUnicaCanon`,
+  `contrato.claveUnicaInmuebleActivo`) ya estaban escritas MySQL-8-aware (`CAST(... AS CHAR)`,
+  `CASE WHEN`, sin `DATE_FORMAT`). Idempotentes ("No migrations are pending" en la 2da corrida).
+- La **suite de 188 tests** (con `synchronize:true` generando el esquema desde entidades) pasa
+  con `type:'mysql'` contra MySQL 8.
+- Cambios: `type:'mariadb'` → `type:'mysql'` en `app.module.ts` y `data-source.ts` (+ comentarios);
+  `.github/workflows/ci.yml` servicio `mariadb:10.11` → `mysql:8.4` (+ healthcheck `mysqladmin ping`);
+  `.env.example` y `README.md` (MariaDB 10.4 → MySQL 8).
+- **DEV local ahora necesita MySQL 8** en `localhost:3306` para `npm test` (antes MariaDB de XAMPP).
+  El CI ya usa `mysql:8.4`.
+
 ### Orden y dependencias (ronda 4)
 
-- **016 primero** (compat MySQL 8) — si la BD no funciona en Railway, nada del deploy avanza.
+- ~~**016 primero**~~ **HECHO.** El resto puede avanzar.
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021

@@ -9,8 +9,8 @@ import { DataSource } from 'typeorm';
  *   npm run migration:run
  */
 export const AppDataSource = new DataSource({
-  // Ver nota en app.module.ts: el servidor real es MariaDB, no MySQL.
-  type: 'mariadb',
+  // Ver nota en app.module.ts: el servidor real es MySQL 8 (Railway). Debe coincidir con app.module.ts.
+  type: 'mysql',
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT ?? 3306),
   username: process.env.DB_USERNAME,

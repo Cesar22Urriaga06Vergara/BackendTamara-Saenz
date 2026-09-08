@@ -30,14 +30,13 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 
 ## 🔴 BLOQUEANTE — no se puede ir a producción sin esto
 
-### DB-1 — Compatibilidad MariaDB → MySQL 8 (Railway)
-El código declara `type: 'mariadb'` (`app.module.ts:40`, `data-source.ts:13`) y hay **columnas
-generadas STORED** (`contrato.entity.ts:107`, `obligacion.entity.ts:94`, migraciones
-`1786800000000` y `1786860000000`). El propio código advierte que el dialecto `mysql` vs `mariadb`
-genera SQL distinto para `GENERATED ALWAYS AS` (ver CONC-01). Railway es MySQL 8.
-- [ ] Levantar un MySQL 8 local, correr las **25 migraciones + `npm run seed` + `npm test`** contra él
-- [ ] Decidir: cambiar `type` a `'mysql'` (y ajustar lo que rompa) o buscar MariaDB gestionada en otro proveedor
-- [ ] Verificar el `date` de `obligacion.periodo` / cálculo de "día calendario" (ver nota en `seed-demo.ts:427`)
+### DB-1 — Compatibilidad MariaDB → MySQL 8 (Railway) — ✅ HECHO (plan BE-016, 2026-09-08)
+- [x] Verificado contra **MySQL 8.4.11** real: las **25 migraciones** corren limpio (incluidas las
+  2 con columnas `GENERATED STORED`), son idempotentes, y la **suite de 188 tests** pasa (con
+  `synchronize:true` generando el esquema desde entidades).
+- [x] `type: 'mariadb'` → **`type: 'mysql'`** en `app.module.ts` y `data-source.ts` (re-verificado).
+- [x] CI (`.github/workflows/ci.yml`) cambiado de `mariadb:10.11` a `mysql:8.4`.
+- [ ] Verificar el `date` de `obligacion.periodo` / "día calendario" en producción — cubierto por el **plan 022** (zona horaria).
 
 ### DB-2 — Almacenamiento del logo de empresa (FS efímero en Railway)
 `empresa.controller.ts` guarda el logo en `./uploads/empresa` con `diskStorage`; `main.ts:58` lo
