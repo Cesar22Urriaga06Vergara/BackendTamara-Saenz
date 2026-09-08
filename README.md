@@ -1,6 +1,6 @@
 # Backend — Inversiones Tamara & Saenz S. En C. (ERP Inmobiliario)
 
-NestJS 11 + TypeORM + MariaDB 10.4 + JWT + Swagger.
+NestJS 11 + TypeORM + MySQL 8 + JWT + Swagger.
 
 ## ✅ Verificado end-to-end (13 de agosto de 2026)
 
@@ -102,8 +102,10 @@ npm run seed               # crea Empresa, Consecutivos y usuarios Admin/Recepci
 npm run start:dev
 ```
 
-El proyecto se prueba y ejecuta contra MariaDB 10.4 (driver mysql2). El backend **no arranca**
-si `JWT_ACCESS_SECRET` es corto (<32) o un valor de ejemplo.
+El proyecto se prueba y ejecuta contra **MySQL 8** (driver mysql2; en producción, el plugin MySQL
+de Railway). Verificado 2026-09-08: las 25 migraciones + los 188 tests corren limpio contra
+MySQL 8.4.11 (plan BE-016). El backend **no arranca** si `JWT_ACCESS_SECRET` es corto (<32) o un
+valor de ejemplo.
 
 Swagger (solo con `SWAGGER_ENABLED=true`): `http://localhost:3010/api/v1/docs`
 
