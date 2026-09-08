@@ -54,6 +54,46 @@ seguridad/config, esfuerzo S–M, riesgo LOW–MED, **sin decisiones de negocio 
 | 013 | Endurecimiento de secretos JWT, contraseñas semilla y modo de arranque (S-1, S-2, S-7) | P1 | S | LOW (cód.) / MED (rotación) | 012 | **DONE (código)** — rotación operativa PENDIENTE DEL DUEÑO |
 | 014 | Remediación de dependencias vulnerables del backend — `npm audit`, `bcrypt`→`bcryptjs` (S-3) | P1 | S–M | LOW–MED | 012 | **DONE** — `npm audit` → **0 vulnerabilidades** |
 
+---
+
+## Ronda 4 — Bloqueantes de producción (2026-09-08, stack: Railway + Cloudflare)
+
+Generados por `improve` (variante `plan`) a partir de `PRODUCCION.md`. Cubren los ítems 🔴
+BLOQUEANTE de ese checklist. **Planned against commit `0436315`.** Deploy elegido:
+backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
+
+| Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |
+|------|--------|-----------|----------|--------|------------|--------|
+| 015 | Configurar el despliegue del backend en Railway (Dockerfile, `railway.json`, `engines`, matriz de env) | P1 | M | LOW | — | **TODO** |
+| 016 | Verificar y asegurar la compatibilidad con MySQL 8 (Railway) | P1 | M | MED | — | **TODO** |
+| 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **TODO** |
+| 018 | Endpoint `/health` (`@nestjs/terminus`) + endurecer la CSP | P1 | S | LOW | — | **TODO** |
+| 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **TODO** |
+| 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **TODO** |
+| 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **TODO** |
+| 022 | Fijar zona horaria (app + conexión BD) y blindar el manejo de fechas (DATA-2) | P1 | M | MED | — | **TODO** |
+
+### Orden y dependencias (ronda 4)
+
+- **016 primero** (compat MySQL 8) — si la BD no funciona en Railway, nada del deploy avanza.
+- **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
+- **019 + 020** dan visibilidad antes de exponer a usuarios.
+- **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021
+  antes de FE-019.
+- **022** es independiente de todos; hacerlo antes de que haya datos reales.
+- Todos son independientes entre sí en cuanto a archivos (015→config, 016→`data-source.ts`/migraciones,
+  017→`empresa`+`main.ts`, 018→`health`+`main.ts`, 019→`instrument.ts`+`app.module.ts`,
+  020→`app.module.ts`+`main.ts`, 021→entidades+services, 022→`obligaciones.service.ts`). Cuidado
+  con 017/018/019/020 que tocan todos `main.ts` — mergear de a uno y rebasear.
+
+### Emparejamiento con el frontend
+
+- **015** (backend Railway) ↔ **FE-017** (frontend Cloudflare) — el `CORS_ORIGIN` del backend debe
+  ser el dominio de Cloudflare Pages; el `NUXT_PUBLIC_API_BASE_URL` del frontend debe ser el de Railway.
+- **018/SEC-2** (CSP backend) ↔ **FE-017** (`_headers` de Cloudflare) — misma tanda de hardening.
+- **019** (Sentry backend) ↔ **FE-018** (Sentry frontend).
+- **021** (transformer dinero) → **FE-019** (limpieza dinero-como-string) — dependencia dura.
+
 ### Ejecución de 012 (2026-09-07)
 
 La verificación baseline destapó tres bloqueos **preexistentes** (ninguno regresión de rondas 1-3),
