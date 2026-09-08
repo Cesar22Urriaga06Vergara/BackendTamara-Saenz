@@ -3,6 +3,7 @@ dist/
 dist/**
 **/dist/
 build/
+*.tsbuildinfo
 
 # Subidas en tiempo de ejecución y salidas locales de agentes (nunca versionar)
 uploads/

@@ -47,15 +47,13 @@ de la UI y de **todos los PDF de recibo** (`pdf-recibo.service.ts:58`).
 - [ ] Ajustar `pdf-recibo.service.ts` para resolver la ruta física / URL nueva
 
 ### DEPLOY-1 — Configuración de plataforma
-- [ ] **`railway.json`** (o `railway.toml`) en el backend: comando de build, `startCommand` (`node dist/main`), `healthcheckPath: /health`, `restartPolicyType`
-- [ ] **Nixpacks vs Dockerfile** — decidir. Un `Dockerfile` multi-stage da control y reproducibilidad; Nixpacks es cero-config. Recomendado: Dockerfile.
-- [ ] **Nitro preset del frontend** para Cloudflare: `NITRO_PRESET=cloudflare-pages` (o `nitro.preset` en `nuxt.config.ts`). Decidir **SSR en Workers vs `ssr: false` + estático** — dado que ya todo el fetch es cliente (P-6), `ssr: false` + Pages estático es el camino limpio y sin sorpresas.
-- [ ] **Variables de entorno en producción**:
-  - Backend (Railway): `NODE_ENV=production`, `JWT_ACCESS_SECRET` (rotado, ≥32 aleatorio), `JWT_ACCESS_EXPIRES_IN=15m`, `JWT_REFRESH_EXPIRES_IN=1d`, `DB_*` (de la referencia del plugin MySQL), `CORS_ORIGIN=https://<dominio-frontend>`, `TRUST_PROXY=true`, `SEED_*` solo para el primer seed y luego quitar, `TZ=America/Bogota`
-  - Frontend (Cloudflare): `NUXT_PUBLIC_API_BASE_URL=https://<backend>.up.railway.app/api/v1`
-- [ ] **`engines`** en ambos `package.json` + `.nvmrc` — hoy no hay pin de Node
-- [ ] **CORS**: `CORS_ORIGIN` = dominio exacto de Cloudflare Pages (no `*`, no `localhost`)
-- [ ] **Dominio propio** + registros DNS en Cloudflare apuntando a Pages (frontend) y CNAME a Railway (backend)
+- [x] **Backend Railway** — `Dockerfile` multi-stage + `railway.json` (`startCommand`, `healthcheckPath`, restart policy) + `tsconfig.build.json` (build determinista, `dist/main.js`) + `engines` + `.nvmrc` + script `deploy:migrate` + `app.listen(port, '0.0.0.0')` + matriz de variables en el README. **→ plan 015 (hecho, 2026-09-08)**. Verificado: `npm ci` + build + `npm ci --omit=dev` + `node dist/main` + `deploy:migrate` cargan bien.
+- [ ] **Frontend Cloudflare** — Nitro preset + `_headers` + env + `engines` → **plan FE-017**.
+- [ ] **`healthcheckPath` de `railway.json`** apunta a `/api/v1/health` que **aún no existe** → requiere **plan 018**; hasta entonces quitar esas líneas o el deploy sale "no sano".
+- [ ] **Variables de entorno en producción** (lista completa en el README, sección "Despliegue (Railway)").
+- [ ] **CORS**: `CORS_ORIGIN` = dominio exacto de Cloudflare Pages (no `*`, no `localhost`) — setear al cablear los dominios.
+- [ ] **Dominio propio** + registros DNS en Cloudflare apuntando a Pages (frontend) y CNAME a Railway (backend).
+- [ ] **Primer seed**: correr `node dist/database/seeds/seed.js` una vez, luego quitar `SEED_*_PASSWORD`.
 
 ### DB-3 — Backups y restore
 - [ ] Confirmar la política de **backup del plugin MySQL de Railway** (frecuencia, retención)
