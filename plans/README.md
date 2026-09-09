@@ -139,6 +139,24 @@ Verificado contra **MySQL 8.4.11** real (zip portable, sin Docker) en el puerto 
   pudo correr en local** (no hay MySQL 8 en `:3306` en esta máquina; el server que estaba se
   apagó a mitad de sesión). Queda a cargo del CI (`mysql:8.4`, corre en el PR).
 
+### Remediación de dependencias — advisories multer/js-yaml (2026-09-09, rama `chore/test-env-local-override`)
+
+El 2026-09-09 GitHub publicó advisories `high` para **`multer` <=2.2.0** (4 CVE de DoS) y **`js-yaml`
+3.0.0–3.15.1 / 4.0.0–4.3.1** (DoS por merge keys). El CI del backend (`npm audit --audit-level=high`)
+pasó a **rojo para cualquier PR** (destapado por el CI de la PR #9, cuyo diff era solo `jest.setup.ts`).
+No lo introdujo ningún plan — son deps transitivas de `@nestjs/platform-express` (multer) y de
+`@nestjs/cli`/`ts-jest` (js-yaml, devDeps).
+
+Fix por `overrides` (mismo patrón que BE-014):
+- `"multer": "^2.3.0"` — release de seguridad, minor, API compatible. El `fileFilter` de
+  `empresa.controller.ts` es **síncrono**, así que la CVE de "race en fileFilter async" no aplicaba.
+- `cosmiconfig > js-yaml: "^4.3.2"` y `@istanbuljs/load-nyc-config > js-yaml: "^3.15.2"` — parches
+  en la misma línea major, scoped para no romper el consumidor 3.x de istanbul.
+- `@nestjs/swagger` usa `js-yaml@5.3.0` (nunca estuvo en rango vulnerable) — sin tocar.
+
+`npm audit` → **0**. `npm ci` + lint + build + `npm test` verde. `multer` sin cobertura de test de
+subida real (no hay spec que haga POST de archivo) — build/tipos OK; el humo de logo va en QA-2.
+
 ### Orden y dependencias (ronda 4)
 
 - ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ **HECHOS.** Sigue: 019/020 (observabilidad), 021 (dinero), 022 (TZ) (+ FE-017).
