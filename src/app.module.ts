@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { EmpresaModule } from './modules/empresa/empresa.module';
@@ -27,6 +28,9 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
   imports: [
+    // Primero: engancha Sentry al ciclo de vida de Nest. Sin SENTRY_DSN (ver instrument.ts) es
+    // inerte. Debe ir antes que los demás módulos.
+    SentryModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -66,6 +70,12 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     HealthModule,
   ],
   providers: [
+    // Reporta a Sentry las excepciones NO controladas por ningún otro filtro (bugs reales:
+    // TypeError, promesas colgadas, etc.). Nest evalúa los filtros globales en orden inverso al
+    // de registro y `TypeOrmExceptionFilter` se registra después vía `app.useGlobalFilters()`
+    // en main.ts, así que sigue atendiendo primero los `QueryFailedError` (traducción a 409/400/
+    // 503). Los `HttpException` los trata Sentry como "esperados" y NO los reporta.
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
