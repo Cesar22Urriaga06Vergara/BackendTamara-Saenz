@@ -138,7 +138,7 @@ El backend se despliega en **Railway** como servicio Docker (`Dockerfile` multi-
 | `NODE_ENV` | `production` | |
 | `PORT` | *(lo inyecta Railway)* | no la definas a mano |
 | `API_PREFIX` | `api` | |
-| `TZ` | `America/Bogota` | crítico para cartera/mora — pendiente plan 022 |
+| `TZ` | *(no definir)* | Railway + su MySQL corren en UTC; dejar el proceso en UTC evita que mysql2 lea los `datetime` corridos. La lógica de negocio usa Bogotá vía `Intl` igual (plan 022) |
 | `TRUST_PROXY` | `true` | Railway está detrás de proxy |
 | `CORS_ORIGIN` | `https://<dominio-frontend>` | dominio exacto de Cloudflare Pages, sin barra final |
 | `SWAGGER_ENABLED` | *(no definir)* | Swagger apagado en prod |

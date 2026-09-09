@@ -109,12 +109,23 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 - [ ] **FE-019**: limpiar los `Number()` y las uniones `number | string` del frontend — depende
   de que este plan esté desplegado.
 
-### DATA-2 — Zona horaria del servidor
-`esVencida()` usa `new Date()` de JS; la query usa `CURDATE()`. Según la TZ del contenedor de
-Railway (UTC por defecto), "vencido hoy" puede desfasarse un día → afecta cartera, mora y
-generación de canon.
-- [ ] Fijar `TZ=America/Bogota` en las variables de Railway
-- [ ] Pasada por todo el manejo de fechas + tests con TZ forzada (UTC y Bogotá) que prueben el límite de medianoche
+### DATA-2 — Zona horaria del servidor — 🟡 el bug de lógica HECHO (plan 022, 2026-09-09); el `timezone` de sesión queda como follow-up
+- [x] El "hoy de negocio" se calcula siempre en **America/Bogota** (`hoyNegocioISO()` en
+  `fecha.util.ts`, vía `Intl`, sin deps ni DST, independiente del `TZ` del proceso).
+  `esVencida()` (JS) y `condicionCarteraVencida` (SQL, ahora `:hoyNegocio` en vez de la función
+  "hoy" de MySQL) comparan contra el mismo día — **se acabó el desfase de la franja nocturna**.
+  Igual para la generación de canon (`generarCanonesParaContrato`) y el recaudo del mes (dashboard).
+- [x] Tests: `vencimiento-tz.integration.spec.ts` (JS ↔ SQL coinciden en la frontera hoy/mañana) +
+  `fecha.util.spec.ts` (5 casos, frontera de medianoche con fake timers). Verificado además con
+  `TZ=UTC npm test` y `TZ=America/Bogota npm test`.
+- [ ] **`timezone: 'Z'` en la conexión mysql2 — NO aplicado.** Se probó y **rompe el round-trip de
+  las columnas `type: 'date'`**: mysql2 serializa los `Date` de query en UTC y TypeORM re-formatea
+  con getters locales → corrimiento de un día en `periodo`/`fechaVencimiento` (revienta el índice
+  único de canon). Hacerlo bien exige pasar strings "YYYY-MM-DD" en vez de `Date` en todo el motor
+  de canon + `dateStrings: ['DATE']` — es un plan propio (`023`, MED). Mientras tanto:
+- [ ] **Operativo**: **NO** definir `TZ` en Railway (dejar el proceso en UTC, igual que el plugin
+  MySQL). Así mysql2 (`timezone: 'local'` por defecto) y la BD concuerdan y los `datetime`/
+  `creadoEn` se leen bien. Si más adelante se quiere `TZ=America/Bogota` para los logs, primero el plan 023.
 
 ### QA-1 — Entorno de staging
 - [ ] Segundo proyecto Railway + segundo Cloudflare Pages (rama `staging` o preview deploys) con datos de prueba

@@ -31,3 +31,16 @@ export function finDelDiaLocal(valor: string): Date {
   base.setHours(23, 59, 59, 999);
   return base;
 }
+
+/**
+ * `"YYYY-MM-DD"` del día calendario ACTUAL en la zona de NEGOCIO (America/Bogota por defecto),
+ * sin importar el `TZ` del proceso (en Railway suele ser UTC). Toda regla de negocio que
+ * dependa de "hoy" (vencimiento de cartera, mes de generación de canon, recaudo del mes) debe
+ * derivar su "hoy" de aquí — nunca de `new Date()` directo — para que el veredicto de la app
+ * (JS) y el de la BD (SQL) coincidan siempre. Colombia no tiene horario de verano, así que el
+ * offset es constante (-05:00) y `Intl` basta sin dependencias.
+ */
+export function hoyNegocioISO(zona = 'America/Bogota'): string {
+  // 'en-CA' formatea como YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zona }).format(new Date());
+}

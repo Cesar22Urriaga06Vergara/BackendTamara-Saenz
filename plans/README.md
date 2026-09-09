@@ -71,7 +71,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 | 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **DONE** (2026-09-09) — `@sentry/nestjs` v10, inerte sin `SENTRY_DSN` |
 | 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **DONE** (2026-09-09) — `nestjs-pino` v5; `x-request-id` por petición |
 | 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **DONE** (2026-09-09) — 27 columnas / 12 entidades; `Number()` de services limpiados |
-| 022 | Fijar zona horaria (app + conexión BD) y blindar el manejo de fechas (DATA-2) | P1 | M | MED | — | **TODO** |
+| 022 | Fijar zona horaria (app + conexión BD) y blindar el manejo de fechas (DATA-2) | P1 | M | MED | — | **DONE parcial** (2026-09-09) — fix de lógica (`hoyNegocioISO()`); `timezone:'Z'` NO va (rompe `type:'date'`) → plan 023 |
 
 ### Ejecución de 016 (2026-09-08, rama `migration/016-mysql8-compat`)
 
@@ -220,9 +220,42 @@ subida real (no hay spec que haga POST de archivo) — build/tipos OK; el humo d
 - Test nuevo: `recaudo.integration.spec.ts` — `typeof` de 6 montos tras `registrarPago` = `number`.
 - **Bloquea FE-019**: desplegar 021 antes de que el frontend quite sus `Number()`.
 
+### Ejecución de 022 (2026-09-09, rama `fix/022-zona-horaria`)
+
+- `fecha.util.ts`: nuevo `hoyNegocioISO(zona='America/Bogota')` → `"YYYY-MM-DD"` del día de negocio
+  vía `Intl.DateTimeFormat('en-CA', { timeZone })`, sin deps, sin DST (Colombia no tiene). Toda
+  regla de negocio que dependa de "hoy" deriva de aquí.
+- `obligaciones.service.ts`: `condicionCarteraVencida` usa `:hoyNegocio` (param) en vez de la
+  función "hoy" de MySQL; `parametrosCondicionSaldoPendiente()` añade `hoyNegocio: hoyNegocioISO()`
+  (todos los callers ya lo pasan — sin cambios en callers). `esVencida()` compara contra
+  `hoyNegocioISO()`. Los 2 `const hoy = new Date()` de generación de canon (L87, L147) → derivados
+  de `hoyNegocioISO()` para que la corrida nocturna no salte de mes.
+- `dashboard.service.ts`: `inicioMes` (recaudo del mes) se basa en `hoyNegocioISO()`.
+- **`timezone: 'Z'` en la conexión — PROBADO Y REVERTIDO.** Rompe el round-trip de `type: 'date'`:
+  mysql2 con la sesión en UTC serializa los `Date` de query en UTC (+5h para un `Date` local de
+  Bogotá) y TypeORM luego re-formatea la columna `date` con getters LOCALES → `periodo` se corre
+  un día → `yaExiste` no matchea → `Duplicate entry` en `IDX_obligacion_canon_unico`. `dateStrings:
+  ['DATE']` arregla la lectura pero no la serialización del parámetro de query. La solución
+  correcta (strings "YYYY-MM-DD" en todo el motor de canon en vez de `Date`) es un **plan 023**.
+- **Guía operativa mientras tanto**: NO definir `TZ` en Railway. Proceso y plugin MySQL ambos en
+  UTC → mysql2 (`timezone:'local'`) concuerda con la BD. Los `datetime`/`creadoEn` se leen bien.
+- `.env.example`: `TZ` comentado con la advertencia; sin `DB_TIMEZONE`. README: fila `TZ` = "(no definir)".
+- Tests: `vencimiento-tz.integration.spec.ts` (`esVencida` y la query de cartera vencida coinciden
+  en la frontera hoy/mañana) + `fecha.util.spec.ts` (5 casos, frontera de medianoche con `jest.useFakeTimers`).
+- Verificado: `npm test`, `TZ=UTC npm test`, `TZ=America/Bogota npm test` — los 3 verde.
+
 ### Orden y dependencias (ronda 4)
 
-- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ · ~~**019**~~ · ~~**020**~~ · ~~**021**~~ **HECHOS.** Sigue: 022 (TZ) (+ FE-017 → FE-018 → FE-019).
+- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ · ~~**019**~~ · ~~**020**~~ · ~~**021**~~ **HECHOS.**
+  **022** parcial (fix de lógica sí; `timezone:'Z'` → **plan 023** pendiente). Bloqueantes de
+  código backend: solo queda 023 (y es MED, no urgente para el primer staging si Railway queda en UTC).
+  Sigue el frontend: FE-017 → FE-018 → FE-019.
+
+## Ronda 4b — pendiente
+
+| Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |
+|------|--------|-----------|----------|--------|------------|--------|
+| 023 | Sesión MySQL en UTC (`timezone:'Z'` + `dateStrings:['DATE']`) — pasar strings "YYYY-MM-DD" en el motor de canon | P2 | M | MED | 022 | **TODO** — destapado al ejecutar 022; ver su nota. Solo necesario si se quiere `TZ` ≠ UTC en Railway o blindar `datetime` contra el TZ del contenedor. |
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021

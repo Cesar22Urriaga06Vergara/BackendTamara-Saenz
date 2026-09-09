@@ -5,6 +5,7 @@ import { Contrato, EstadoContrato } from '../contratos/entities/contrato.entity'
 import { ObligacionesService } from '../obligaciones/obligaciones.service';
 import { Novedad, EstadoNovedad } from '../novedades/entities/novedad.entity';
 import { ReciboCaja, EstadoRecibo } from '../recaudo/entities/recibo-caja.entity';
+import { fechaLocalDesdeString, hoyNegocioISO } from '../../common/utils/fecha.util';
 
 /**
  * Métricas gerenciales y operativas consolidadas.
@@ -38,7 +39,9 @@ export class DashboardService {
     const obligacionesVencidas = await this.obligacionesService.todasPendientes();
     const carteraTotal = obligacionesVencidas.reduce((acc, o) => acc + (o.valorOriginal - o.valorAbonado), 0);
 
-    const inicioMes = new Date();
+    // Primer día del mes en curso según la zona de negocio (Bogotá), no el TZ del proceso: el
+    // último día del mes a las 23:00 en Bogotá ya es el mes siguiente en UTC.
+    const inicioMes = fechaLocalDesdeString(hoyNegocioISO());
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
 

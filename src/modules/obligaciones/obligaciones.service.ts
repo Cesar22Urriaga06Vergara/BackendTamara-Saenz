@@ -7,6 +7,7 @@ import { Empresa } from '../empresa/entities/empresa.entity';
 import { CrearObligacionNovedadDto } from './dto/crear-obligacion-novedad.dto';
 import { paginar, ResultadoPaginado } from '../../common/utils/paginar.util';
 import { redondearMoneda, esCeroMoneda } from '../../common/utils/dinero.util';
+import { hoyNegocioISO } from '../../common/utils/fecha.util';
 
 /**
  * Obligación con el flag `vencida` (fecha de vencimiento en el pasado) — lo que consume la
@@ -84,7 +85,9 @@ export class ObligacionesService {
 
     const inicioContrato = this.fechaLocalDesdeColumnaDate(contrato.fechaInicio);
     const primerPeriodo = this.primerDiaMes(inicioContrato);
-    const hoy = new Date();
+    // "Hoy" en la zona de negocio (Bogotá), no el del proceso: así la generación nocturna no
+    // salta de mes cuando el contenedor está en UTC.
+    const hoy = this.fechaLocalDesdeColumnaDate(hoyNegocioISO());
     // Último periodo a generar: mes en curso + (horizonte - 1) meses de anticipación.
     const ultimoPeriodo = new Date(hoy.getFullYear(), hoy.getMonth() + Math.max(0, horizonte - 1), 1);
 
@@ -144,7 +147,8 @@ export class ObligacionesService {
     const contrato = await contratoRepo.findOne({ where: { id: dto.contratoId } });
     if (!contrato) throw new NotFoundException('Contrato no encontrado.');
 
-    const hoy = new Date();
+    // Fecha de negocio (Bogotá): `periodo`/`fechaVencimiento` son columnas `type: 'date'`.
+    const hoy = this.fechaLocalDesdeColumnaDate(hoyNegocioISO());
     const obligacion = repo.create({
       contrato,
       tipo: TipoObligacion.NOVEDAD,
@@ -225,20 +229,23 @@ export class ObligacionesService {
    * realmente se debe" — separa la deuda exigible del canon generado por adelantado.
    */
   condicionCarteraVencida(alias = 'o'): string {
-    return `(${this.condicionSaldoPendiente(alias)} AND ${alias}.fechaVencimiento <= CURDATE())`;
+    // Parámetro `:hoyNegocio` en vez de la función de fecha "hoy" de MySQL: esa depende del TZ de
+    // la sesión (UTC en Railway) y podía discrepar un día de `esVencida()` (JS, TZ del proceso)
+    // en la franja nocturna colombiana. Ahora ambos comparan contra el mismo día de Bogotá.
+    return `(${this.condicionSaldoPendiente(alias)} AND ${alias}.fechaVencimiento <= :hoyNegocio)`;
   }
 
   parametrosCondicionSaldoPendiente() {
     return {
       estadosCapitalPendiente: [EstadoObligacion.PENDIENTE, EstadoObligacion.PARCIAL],
+      hoyNegocio: hoyNegocioISO(),
     };
   }
 
-  /** `true` si la obligación ya venció (fecha de vencimiento en el pasado o es hoy). */
+  /** `true` si la obligación ya venció (fecha de vencimiento en el pasado o es hoy, en Bogotá). */
   esVencida(fechaVencimiento: Date | string): boolean {
     const venc = this.fechaLocalDesdeColumnaDate(fechaVencimiento);
-    const ahora = new Date();
-    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    const hoy = this.fechaLocalDesdeColumnaDate(hoyNegocioISO());
     return venc.getTime() <= hoy.getTime();
   }
 
