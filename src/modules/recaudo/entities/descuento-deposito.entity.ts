@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { Contrato } from '../../contratos/entities/contrato.entity';
 
 /**
@@ -32,7 +33,7 @@ export class DescuentoDeposito {
   @Column({ length: 200 })
   concepto: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   valor: number;
 
   @Column({ type: 'enum', enum: TipoDescuentoDeposito, default: TipoDescuentoDeposito.GENERAL })

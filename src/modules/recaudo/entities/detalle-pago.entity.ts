@@ -1,4 +1,5 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { ReciboCaja } from './recibo-caja.entity';
 import { MedioPago } from '../../../common/enums/medio-pago.enum';
 
@@ -17,7 +18,7 @@ export class DetallePago {
   @Column({ type: 'enum', enum: MedioPago })
   medioPago: MedioPago;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   monto: number;
 
   @Column({ type: 'varchar', length: 100, nullable: true })

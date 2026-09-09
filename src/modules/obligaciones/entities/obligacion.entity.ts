@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { Contrato } from '../../contratos/entities/contrato.entity';
 
 export enum TipoObligacion {
@@ -41,10 +42,10 @@ export class Obligacion {
   @Column({ type: 'date' })
   fechaVencimiento: Date;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   valorOriginal: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, default: 0 })
   valorAbonado: number;
 
   /**
@@ -57,7 +58,7 @@ export class Obligacion {
    * `valorMoraAcumulada` de la migración original quedó huérfana (sin campo aquí) a propósito
    * — nada necesita leerla para revertir un abono de mora ya cobrado.
    */
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, default: 0 })
   valorMoraPagada: number;
 
   @Column({ type: 'enum', enum: EstadoObligacion, default: EstadoObligacion.PENDIENTE })
