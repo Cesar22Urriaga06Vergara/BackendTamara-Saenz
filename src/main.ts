@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { SanitizarHtmlPipe } from './common/pipes/sanitizar-html.pipe';
@@ -12,7 +13,10 @@ import { validarSecretoJwt } from './common/utils/validar-secreto-jwt.util';
 import { directorioUploads, PREFIJO_PUBLICO_UPLOADS } from './common/utils/rutas-archivos.util';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // `bufferLogs: true`: retiene los logs del arranque hasta que se instala el logger de pino.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger)); // logger estructurado (nestjs-pino) para toda la app
+  const logger = app.get(Logger);
   const config = app.get(ConfigService);
 
   // Aborta el arranque si el secreto que firma los access tokens es débil o de ejemplo (S-1).
@@ -55,7 +59,7 @@ async function bootstrap() {
   } else if (/^\d+$/.test(trustProxy)) {
     app.set('trust proxy', Number(trustProxy));
   } else {
-    console.warn(
+    logger.warn(
       `TRUST_PROXY="${trustProxy}" no es un valor reconocido ("false", "true" o un número de saltos). Se ignora: trust proxy queda deshabilitado.`,
     );
     app.set('trust proxy', false);
@@ -106,9 +110,9 @@ async function bootstrap() {
   // no solo en localhost, para que el proxy del proveedor pueda enrutar el tráfico.
   await app.listen(port, '0.0.0.0');
 
-  console.log(`🚀 API Tamara & Saenz corriendo en http://localhost:${port}/${prefix}`);
+  logger.log(`API Tamara & Saenz escuchando en el puerto ${port} (prefijo /${prefix})`);
   if (swaggerHabilitado) {
-    console.log(`📄 Swagger disponible en http://localhost:${port}/${prefix}/docs`);
+    logger.log(`Swagger disponible en /${prefix}/docs`);
   }
 }
 void bootstrap();

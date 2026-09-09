@@ -69,7 +69,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 | 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **DONE** (2026-09-08) |
 | 018 | Endpoint `/health` + endurecer la CSP | P1 | S | LOW | — | **DONE** (2026-09-08) — hand-rolled (sin `@nestjs/terminus`, v12 es ESM); CSP sin `'unsafe-inline'` en `script-src` |
 | 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **DONE** (2026-09-09) — `@sentry/nestjs` v10, inerte sin `SENTRY_DSN` |
-| 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **TODO** |
+| 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **DONE** (2026-09-09) — `nestjs-pino` v5; `x-request-id` por petición |
 | 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **TODO** |
 | 022 | Fijar zona horaria (app + conexión BD) y blindar el manejo de fechas (DATA-2) | P1 | M | MED | — | **TODO** |
 
@@ -179,9 +179,31 @@ subida real (no hay spec que haga POST de archivo) — build/tipos OK; el humo d
 - **Deferido**: reportar también los 5xx `HttpException` a Sentry (hoy no) — filtro propio si se pide.
 - **Operativo pendiente del dueño**: crear el proyecto Sentry backend y setear `SENTRY_DSN` en Railway.
 
+### Ejecución de 020 (2026-09-09, rama `feat/020-logging-pino`)
+
+- `nestjs-pino` **v5.1** + `pino` v10 + `pino-http` v11 (deps) + `pino-pretty` v13 (devDep).
+- `app.module.ts`: `LoggerModule.forRoot()` (2º en `imports`, tras `SentryModule`). Nivel vía
+  helper `nivelDeLog()`: `LOG_LEVEL` manda; si no `test`→`silent`, `prod`→`info`, resto→`debug`.
+  `transport: pino-pretty` **solo** si `NODE_ENV === 'development'` (worker thread; en test/prod =
+  JSON crudo — evita la STOP condition del worker en jest). `genReqId` reusa/genera `x-request-id`
+  y lo pone en la respuesta. `redact` de `authorization`/`cookie`. `serializers` req/res mínimos.
+- `main.ts`: `NestFactory.create(AppModule, { bufferLogs: true })` + `app.useLogger(app.get(Logger))`.
+  Los 2 `console.log` del banner de arranque y el `console.warn` de `TRUST_PROXY` → `logger.*`.
+- `audit.interceptor.ts`: inyecta `PinoLogger` (`setContext(AuditInterceptor.name)`); el
+  `console.error` de "Error al persistir registro" → `this.logger.error({ err }, ...)`.
+- El único `new Logger()` restante (`obligaciones.cron.ts`) lo intercepta `app.useLogger` — sin tocar.
+  Los `console.log` de `src/database/seeds/*` son scripts CLI — fuera de scope (el criterio del plan
+  los excluye). Los `console.log` dentro de STRINGS en `validar-secreto-jwt.util.ts` son texto de
+  un mensaje de error, no llamadas — el grep del done-criteria da ese falso positivo.
+- Test nuevo: `src/common/http-logging.integration.spec.ts` (2 casos: `x-request-id` generado /
+  propagado). `auditoria.integration.spec.ts` sigue verde con el `PinoLogger` inyectado.
+  `npm test` → **28 suites / 197 tests verde**, exit 0 en ~2 min (sin hang; un run parcial mostró
+  el aviso "did not exit" de jest por el stream stdout de pino — benigno, el run completo cierra
+  limpio; si el CI colgara, añadir un flush en `jest.setup-after-env.ts`).
+
 ### Orden y dependencias (ronda 4)
 
-- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ · ~~**019**~~ **HECHOS.** Sigue: 020 (logs pino), 021 (dinero), 022 (TZ) (+ FE-017).
+- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ · ~~**019**~~ · ~~**020**~~ **HECHOS.** Sigue: 021 (dinero), 022 (TZ) (+ FE-017).
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021

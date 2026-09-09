@@ -1,5 +1,6 @@
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor, forwardRef } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { PinoLogger } from 'nestjs-pino';
 import { Observable, catchError, tap, throwError } from 'rxjs';
 import { AUDIT_ACTION_KEY, AuditActionMeta } from '../decorators/audit-action.decorator';
 import { AuditoriaService } from '../../modules/auditoria/auditoria.service';
@@ -15,7 +16,10 @@ export class AuditInterceptor implements NestInterceptor {
   constructor(
     private reflector: Reflector,
     @Inject(forwardRef(() => AuditoriaService)) private readonly auditoriaService: AuditoriaService,
-  ) {}
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(AuditInterceptor.name);
+  }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const meta = this.reflector.getAllAndOverride<AuditActionMeta>(AUDIT_ACTION_KEY, [
@@ -45,7 +49,7 @@ export class AuditInterceptor implements NestInterceptor {
           ipOrigen: req.ip,
         })
         .catch((err) => {
-          console.error('[AUDITORIA] Error al persistir registro:', err.message);
+          this.logger.error({ err }, 'Error al persistir el registro de auditoría');
         });
     };
 
