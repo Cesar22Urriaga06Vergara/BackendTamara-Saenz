@@ -1,6 +1,6 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -15,9 +15,10 @@ import { AuditAction } from '../../common/decorators/audit-action.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  /** Limitado a 5 intentos/minuto por IP (AUD-019) para dificultar fuerza bruta sobre credenciales. */
+  /** Baja el rate-limit global (200/min) a 5 intentos/minuto por IP (AUD-019) para dificultar
+   *  la fuerza bruta sobre credenciales. El `ThrottlerGuard` es global (ver `app.module.ts`). */
   @Public()
-  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @AuditAction({ modulo: 'AUTH', accion: 'LOGIN' })

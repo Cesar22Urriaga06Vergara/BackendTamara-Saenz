@@ -251,6 +251,31 @@ subida real (no hay spec que haga POST de archivo) — build/tipos OK; el humo d
   código backend: solo queda 023 (y es MED, no urgente para el primer staging si Railway queda en UTC).
   Sigue el frontend: FE-017 → FE-018 → FE-019.
 
+## Ronda 5 — tanda 🟠 ALTO (2026-09-09, pre-usuarios)
+
+Ítems de la sección "🟠 ALTO" de `PRODUCCION.md` que el dueño pidió cerrar antes de exponer usuarios.
+
+| # | Título | Estado |
+|---|--------|--------|
+| S-12 | Versionar docs+planes en git | **DONE** (PR #15 BE, #6 FE) |
+| — | Hardening barato: S-10 (cron poda `refresh_token`) + rate-limit global + pool de conexiones | **DONE** (rama `feat/hardening-barato`) |
+| P-4 | Índices compuestos (migración) | **en curso** |
+| — | Política de contraseñas (regex mayúscula+dígito) | **en curso** |
+| §A | `PATCH diaPago` editable (Recepcionista + Admin) | **en curso** (backend + frontend) |
+
+### Ejecución de "hardening barato" (2026-09-09, rama `feat/hardening-barato`)
+
+- **Rate-limit global**: `ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }])` en `app.module.ts`
+  (antes estaba local en `auth.module` solo para login). `{ provide: APP_GUARD, useClass:
+  ThrottlerGuard }` **primero** en `providers` (corta antes de auth/DB). `/auth/login` baja a
+  5/min con `@Throttle` (ya no `@UseGuards`). `HealthController` con `@SkipThrottle()`.
+  **Requiere `TRUST_PROXY` en Railway** para contar la IP real.
+- **S-10**: `src/modules/auth/refresh-token.cron.ts` — `@Cron(EVERY_DAY_AT_3AM)` → `podar()`:
+  borra `expiraEn < now` y `revocado = true AND creadoEn < now-7d`; conserva revocados recientes
+  (ventana para futura detección de reuso — esa detección es un plan aparte). Spec de integración.
+- **Pool**: `extra: { connectionLimit: DB_POOL_SIZE || 10 }` en `app.module` (el `data-source.ts`
+  de la CLI de migraciones abre 1 conexión, no necesita pool). `.env.example` + README.
+
 ## Ronda 4b — pendiente
 
 | Plan | Título | Prioridad | Esfuerzo | Riesgo | Depende de | Estado |

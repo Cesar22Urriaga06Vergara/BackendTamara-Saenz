@@ -178,15 +178,22 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 
 ## 🟠 ALTO — antes de dar acceso a usuarios reales
 
-- [ ] **FE-014** — deps vulnerables del frontend + regenerar `package-lock.json` (bloqueado por `force=true` en `~/.npmrc` local → `npm config delete force`)
-- [ ] **`npm audit` en el CI del frontend** + **secret scanning** (gitleaks) en ambos CI
-- [ ] **S-10** — job que limpie `refresh_token` revocados/expirados (la tabla crece sin límite) + detección de reuso de refresh token
-- [ ] **P-4** — índices compuestos (`obligacion(estado,fechaVencimiento)`, `recibo_caja.creadoEn`, `movimiento(medioPago,tipo,esReverso)`) — `EXPLAIN` primero, luego migración
-- [ ] **Política de contraseñas** — hoy solo `@MinLength(8)` (`cambiar-password.dto.ts:5`, `create-usuario.dto.ts:7`). Para un sistema con dinero: exigir mayúscula+número, y/o bloqueo tras N intentos fallidos
-- [ ] **Accesibilidad** — pasada WCAG AA (navegación por teclado del cajero, contraste, foco en modales, errores asociados a campos). Sin auditar hoy.
-- [ ] **Rate-limit global** en el backend (no solo login)
-- [ ] **Pool de conexiones** de TypeORM dimensionado (`extra.connectionLimit`) según el plan de Railway
-- [ ] **S-12** — `.gitignore` `**/*.md` demasiado amplio saca `AGENTS.md` y specs de negocio de git
+- [x] **FE-014** — deps muertas fuera + `overrides` js-yaml/svgo + `npm audit` en el CI del front
+  (PR #5). **FE-014b**: `pinia ^4` + `.nvmrc` a Node 22 LTS (PR #7).
+- [ ] **secret scanning** (gitleaks) en ambos CI. (`npm audit` ya está en los dos CI.)
+- [x] **S-10** — cron diario `RefreshTokenCron.podar()` (borra expirados + revocados > 7 días;
+  conserva revocados recientes como ventana para detección de reuso). La **detección de reuso**
+  en sí sigue pendiente (plan propio).
+- [ ] **P-4** — índices compuestos (`obligacion(estado,fechaVencimiento)`, `recibo_caja.creadoEn`,
+  `movimiento(medioPago,tipo,esReverso)`) — migración. _(en curso, misma tanda)_
+- [ ] **Política de contraseñas** — regex mayúscula+dígito en los DTOs. Lockout tras N intentos
+  lo mitiga hoy el rate-limit de 5/min en `/auth/login`. _(en curso, misma tanda)_
+- [ ] **Accesibilidad** — pasada WCAG AA. Sin auditar.
+- [x] **Rate-limit global** — `ThrottlerModule` global (200/min por IP), `/auth/login` 5/min,
+  `/health` exento. ⚠️ Requiere `TRUST_PROXY` seteado en Railway para contar la IP del cliente.
+- [x] **Pool de conexiones** — `extra.connectionLimit` = `DB_POOL_SIZE` (default 10). Dimensionar
+  al máx. del plugin MySQL de Railway.
+- [x] **S-12** — docs y planes versionados en git (PR #15 backend, #6 frontend).
 
 ---
 

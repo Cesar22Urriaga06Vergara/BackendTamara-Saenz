@@ -152,6 +152,7 @@ El backend se despliega en **Railway** como servicio Docker (`Dockerfile` multi-
 | `DB_DATABASE` | `${{MySQL.MYSQLDATABASE}}` | |
 | `DB_SYNCHRONIZE` | `false` | producción usa migraciones |
 | `DB_LOGGING` | `false` | |
+| `DB_POOL_SIZE` | `10` | pool de conexiones; ajustar al máx. del plugin MySQL de Railway |
 | `EMPRESA_NOMBRE` / `EMPRESA_NIT` / `EMPRESA_SLOGAN` | *(datos reales)* | solo se usan en el primer seed |
 | `HORIZONTE_MESES_CANON` | `3` | |
 | `SENTRY_DSN` | *(DSN del proyecto Sentry backend)* | vacío = desactivado; un 500 en prod debe aparecer en Sentry |

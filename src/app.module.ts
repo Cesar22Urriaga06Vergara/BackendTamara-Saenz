@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
 
@@ -69,6 +70,10 @@ function nivelDeLog(): string {
       },
     }),
     ConfigModule.forRoot({ isGlobal: true }),
+    // Rate-limit GLOBAL por IP para toda la API (200 req/min). `/auth/login` lo baja a 5/min
+    // (`@Throttle` en el controller) y `/health` lo salta (`@SkipThrottle`). Detrás de Railway
+    // hay que fijar `TRUST_PROXY` para que la IP contada sea la del cliente, no la del proxy.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -86,6 +91,9 @@ function nivelDeLog(): string {
         autoLoadEntities: true,
         synchronize: cfg.get('DB_SYNCHRONIZE') === 'true', // false en producción: usar migraciones
         logging: cfg.get('DB_LOGGING') === 'true',
+        // Tamaño del pool de conexiones mysql2. Dimensiónalo según el plan de Railway
+        // (máx. de conexiones del plugin MySQL). Por defecto 10 (el default de mysql2).
+        extra: { connectionLimit: Number(cfg.get('DB_POOL_SIZE')) || 10 },
       }),
     }),
     ScheduleModule.forRoot(),
@@ -107,6 +115,8 @@ function nivelDeLog(): string {
     HealthModule,
   ],
   providers: [
+    // Primero de todos los guards: corta el tráfico abusivo antes de gastar CPU en auth/DB.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Reporta a Sentry las excepciones NO controladas por ningún otro filtro (bugs reales:
     // TypeError, promesas colgadas, etc.). Nest evalúa los filtros globales en orden inverso al
     // de registro y `TypeOrmExceptionFilter` se registra después vía `app.useGlobalFilters()`

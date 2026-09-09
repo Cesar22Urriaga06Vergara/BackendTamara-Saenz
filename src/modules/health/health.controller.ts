@@ -1,5 +1,6 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { SkipThrottle } from '@nestjs/throttler';
 import { DataSource } from 'typeorm';
 import { Public } from '../../common/decorators/public.decorator';
 
@@ -23,6 +24,7 @@ interface EstadoIndicador {
  * - No expone versión, hostname ni ningún dato interno — es un endpoint abierto.
  */
 @Controller('health')
+@SkipThrottle() // Railway y el monitor de uptime lo pegan cada pocos segundos — no rate-limitarlo.
 export class HealthController {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
