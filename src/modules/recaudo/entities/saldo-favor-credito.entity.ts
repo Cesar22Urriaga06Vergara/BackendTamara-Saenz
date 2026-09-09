@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { ReciboCaja } from './recibo-caja.entity';
 import { Contrato } from '../../contratos/entities/contrato.entity';
 
@@ -26,10 +27,10 @@ export class SaldoFavorCredito {
   @ManyToOne(() => ReciboCaja, { nullable: true, onDelete: 'CASCADE' })
   recibo: ReciboCaja | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   montoOriginal: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   montoDisponible: number;
 
   @CreateDateColumn()

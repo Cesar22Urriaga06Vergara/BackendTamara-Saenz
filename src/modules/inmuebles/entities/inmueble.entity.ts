@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { Propietario } from '../../propietarios/entities/propietario.entity';
 
 export enum EstadoInmueble {
@@ -32,10 +33,10 @@ export class Inmueble {
   @Column({ length: 120 })
   barrio: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   canonValor: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, nullable: true })
   depositoValor: number | null;
 
   @Column({ type: 'varchar', length: 40, nullable: true })

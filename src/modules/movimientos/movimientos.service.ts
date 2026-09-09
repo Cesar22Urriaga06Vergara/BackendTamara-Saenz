@@ -207,10 +207,10 @@ export class MovimientosService {
       const descuentos = await descuentoRepo.find({
         where: { contrato: { id: contrato.id }, anuladoEn: IsNull() },
       });
-      const totalDescuentos = descuentos.reduce((acc, d) => acc + Number(d.valor), 0);
+      const totalDescuentos = descuentos.reduce((acc, d) => acc + d.valor, 0);
 
       // El depósito original = lo que se devolvió (monto del movimiento) + lo que se descontó.
-      contrato.depositoGarantia = Number(original.monto) + totalDescuentos;
+      contrato.depositoGarantia = original.monto + totalDescuentos;
       contrato.depositoLiquidadoEn = null;
       await contratoRepo.save(contrato);
 
@@ -233,9 +233,9 @@ export class MovimientosService {
         });
         for (const a of aplicaciones) {
           if ((a.concepto as string) === 'MORA') {
-            await this.obligacionesService.revertirAbonoMora(a.obligacion.id, Number(a.montoAplicado), manager);
+            await this.obligacionesService.revertirAbonoMora(a.obligacion.id, a.montoAplicado, manager);
           } else {
-            await this.obligacionesService.revertirAbono(a.obligacion.id, Number(a.montoAplicado), manager);
+            await this.obligacionesService.revertirAbono(a.obligacion.id, a.montoAplicado, manager);
           }
         }
         reciboInterno.estado = EstadoRecibo.ANULADO;

@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { ReciboCaja } from './recibo-caja.entity';
 import { Obligacion } from '../../obligaciones/entities/obligacion.entity';
 
@@ -31,7 +32,7 @@ export class AplicacionPago {
   @ManyToOne(() => Obligacion, { nullable: false })
   obligacion: Obligacion;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   montoAplicado: number;
 
   @Column({ type: 'enum', enum: ConceptoAplicacion, default: ConceptoAplicacion.CAPITAL })
@@ -43,7 +44,7 @@ export class AplicacionPago {
    * porque pagos posteriores sobre la misma obligación seguirían moviendo el saldo actual.
    * Nullable porque las aplicaciones creadas antes de este campo (RECAUDO-03) no lo tienen.
    */
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, nullable: true })
   saldoPosterior: number | null;
 
   @CreateDateColumn()

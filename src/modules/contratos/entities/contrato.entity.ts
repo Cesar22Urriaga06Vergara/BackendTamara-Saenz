@@ -9,6 +9,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { Cliente } from '../../personas/entities/cliente.entity';
 import { Codeudor } from '../../personas/entities/codeudor.entity';
 import { Inmueble } from '../../inmuebles/entities/inmueble.entity';
@@ -59,13 +60,13 @@ export class Contrato {
   @Column({ type: 'int', default: 5 })
   diaPago: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   canonValor: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, default: 0 })
   saldoAFavor: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, default: 0 })
   depositoGarantia: number;
 
   /**

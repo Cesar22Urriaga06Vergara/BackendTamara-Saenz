@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { Contrato } from '../../contratos/entities/contrato.entity';
 import { DetallePago } from './detalle-pago.entity';
 import { AplicacionPago } from './aplicacion-pago.entity';
@@ -26,7 +27,7 @@ export class ReciboCaja {
   @Index()
   contrato: Contrato;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   valorTotal: number;
 
   /**
@@ -34,7 +35,7 @@ export class ReciboCaja {
    * cambio (`excedenteComoSaldoFavor = false`); solo cuando el cliente pide expresamente dejar
    * un abono adelantado queda como `SaldoFavorCredito` acumulable (RDN-01 de la auditoría).
    */
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, default: 0 })
   excedente: number;
 
   /** true = el excedente quedó como saldo a favor; false = se devolvió como cambio inmediato. */
@@ -47,7 +48,7 @@ export class ReciboCaja {
    * porción como un crédito fresco — antes la anulación revertía el capital completo pero no
    * devolvía el saldo a favor que había financiado parte del pago (hallazgo A3-a).
    */
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, default: 0 })
   saldoFavorConsumido: number;
 
   /**

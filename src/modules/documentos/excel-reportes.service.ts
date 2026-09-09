@@ -40,7 +40,7 @@ export class ExcelReportesService {
         documento: c.cliente?.numeroDocumento,
         inmueble: c.inmueble?.direccion,
         barrio: c.inmueble?.barrio,
-        canon: Number(c.canonValor),
+        canon: c.canonValor,
         fechaInicio: c.fechaInicio,
         fechaFin: c.fechaFin ?? '—',
         estado: c.estado,
@@ -87,13 +87,13 @@ export class ExcelReportesService {
         inmueble: r.contrato?.inmueble?.direccion,
         barrio: r.contrato?.inmueble?.barrio,
         tipoDocumento,
-        valorTotal: Number(r.valorTotal),
-        excedente: Number(r.excedente),
+        valorTotal: r.valorTotal,
+        excedente: r.excedente,
         estado: r.estado,
       });
 
       if (r.estado === 'EMITIDO' && !r.esLiquidacionDeposito) {
-        totalRecaudoNeto += Number(r.valorTotal) - (r.excedenteComoSaldoFavor ? 0 : Number(r.excedente));
+        totalRecaudoNeto += r.valorTotal - (r.excedenteComoSaldoFavor ? 0 : r.excedente);
       }
     });
 
@@ -127,7 +127,7 @@ export class ExcelReportesService {
     inmuebles
       .sort((a, b) => (a.barrio ?? '').localeCompare(b.barrio ?? ''))
       .forEach((i) => {
-        sheet.addRow({ direccion: i.direccion, barrio: i.barrio, canon: Number(i.canonValor), estado: i.estado });
+        sheet.addRow({ direccion: i.direccion, barrio: i.barrio, canon: i.canonValor, estado: i.estado });
       });
     sheet.getColumn('canon').numFmt = '$ #,##0';
 
@@ -161,7 +161,7 @@ export class ExcelReportesService {
     let totalSaldo = 0;
 
     obligacionesPendientes.forEach((o) => {
-      const saldoPendiente = Number(o.valorOriginal) - Number(o.valorAbonado);
+      const saldoPendiente = o.valorOriginal - o.valorAbonado;
       totalSaldo += saldoPendiente;
 
       sheet.addRow({
@@ -172,8 +172,8 @@ export class ExcelReportesService {
         concepto: o.concepto,
         tipo: o.tipo,
         fechaVencimiento: o.fechaVencimiento,
-        valorOriginal: Number(o.valorOriginal),
-        valorAbonado: Number(o.valorAbonado),
+        valorOriginal: o.valorOriginal,
+        valorAbonado: o.valorAbonado,
         saldoPendiente,
         estado: o.estado,
       });

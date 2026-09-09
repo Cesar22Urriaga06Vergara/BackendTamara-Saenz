@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { MedioPago } from '../../../common/enums/medio-pago.enum';
 
 export enum TipoMovimiento {
@@ -42,7 +43,7 @@ export class Movimiento {
   @Column({ length: 200 })
   concepto: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica })
   monto: number;
 
   /**

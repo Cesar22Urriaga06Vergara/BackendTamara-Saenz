@@ -1,4 +1,5 @@
 import { Column, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 
 /**
  * Entidad Empresa: datos corporativos + parámetros globales de negocio.
@@ -42,7 +43,7 @@ export class Empresa {
    * período (la especificación no define cortes periódicos de caja, solo un único punto de
    * partida — no se inventa un mecanismo de "cierre" no solicitado).
    */
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, default: 0 })
   saldoInicialCaja: number;
 
   @UpdateDateColumn()

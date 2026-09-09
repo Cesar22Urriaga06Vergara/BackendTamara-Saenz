@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { columnaNumerica } from '../../../common/utils/columna-numerica.transformer';
 import { Contrato } from '../../contratos/entities/contrato.entity';
 import { Inmueble } from '../../inmuebles/entities/inmueble.entity';
 import { MedioPago } from '../../../common/enums/medio-pago.enum';
@@ -63,7 +64,7 @@ export class Novedad {
   @Column({ type: 'enum', enum: ImpactoFinanciero, default: ImpactoFinanciero.PENDIENTE })
   impactoFinanciero: ImpactoFinanciero;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: columnaNumerica, nullable: true })
   montoAprobado: number | null;
 
   @Column({ type: 'varchar', length: 150, nullable: true })

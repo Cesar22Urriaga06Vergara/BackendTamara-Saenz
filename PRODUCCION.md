@@ -99,13 +99,15 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
   `'unsafe-inline'` (solo `style-src`, para Swagger opt-in); + `object-src 'none'`,
   `frame-ancestors 'none'`, `base-uri 'self'`.
 
-### DATA-1 — Dinero como `decimal` → string en el JSON (D-1 / D-4)
-El backend serializa los `decimal` de MySQL como **string**; el frontend lo parchea con `Number()`
-disperso y uniones `number | string`. Riesgo de bug silencioso de redondeo/coerción en **todo** el
-cálculo financiero visible.
-- [ ] Transformer TypeORM `decimal ↔ number` centralizado en las columnas de dinero
-- [ ] Limpiar los `Number()` y las uniones `number | string` del frontend
-- [ ] Tests de que un pago mixto, un excedente y una anulación devuelven `number` en toda la cadena
+### DATA-1 — Dinero como `decimal` → string en el JSON (D-1 / D-4) — 🟡 backend HECHO (plan 021), falta frontend (FE-019)
+- [x] Transformer TypeORM `decimal ↔ number` (`src/common/utils/columna-numerica.transformer.ts`)
+  en las **27 columnas de dinero** de 12 entidades. La columna se hidrata como `number`; el JSON
+  del API sale con números. Los `Number(...)` redundantes de los services quitados (quedan solo
+  los de agregados `getRawOne`/`SUM`, que TypeORM sí devuelve como string).
+- [x] Test de integración: tras `registrarPago`, `typeof recibo.valorTotal === 'number'` (+ 6
+  campos más). Unit del transformer (8 casos).
+- [ ] **FE-019**: limpiar los `Number()` y las uniones `number | string` del frontend — depende
+  de que este plan esté desplegado.
 
 ### DATA-2 — Zona horaria del servidor
 `esVencida()` usa `new Date()` de JS; la query usa `CURDATE()`. Según la TZ del contenedor de
