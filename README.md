@@ -156,6 +156,7 @@ El backend se despliega en **Railway** como servicio Docker (`Dockerfile` multi-
 | `HORIZONTE_MESES_CANON` | `3` | |
 | `SENTRY_DSN` | *(DSN del proyecto Sentry backend)* | vacío = desactivado; un 500 en prod debe aparecer en Sentry |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | muestreo de performance; subir/bajar según cuota del plan Sentry |
+| `LOG_LEVEL` | `info` | `debug`\|`info`\|`warn`\|`error`\|`silent` — logs JSON de una línea a stdout (Railway los captura) |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(email real + contraseña fuerte)* | **quitar tras el primer seed** |
 | `SEED_RECEPCION_EMAIL` / `SEED_RECEPCION_PASSWORD` | *(idem)* | idem |
 

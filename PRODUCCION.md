@@ -76,9 +76,13 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
   (`SentryGlobalFilter`); `TypeOrmExceptionFilter` sigue traduciendo `QueryFailedError` primero
   (orden de filtros verificado). Los `HttpException` no se reportan (son "esperados").
 
-### OBS-3 — Logging estructurado
-- [ ] `nestjs-pino` (o `pino`) con salida JSON y niveles. Hoy: logger por defecto de Nest sin formato + un `console.error` suelto en `audit.interceptor.ts:48`.
-- [ ] Correlation ID por petición (para rastrear un flujo de pago completo en los logs de Railway)
+### OBS-3 — Logging estructurado — ✅ HECHO (plan 020, 2026-09-09)
+- [x] `nestjs-pino` — JSON de una línea a stdout en prod, `pino-pretty` legible solo en dev,
+  `silent` en test. Nivel por `LOG_LEVEL` (default: `info` prod / `debug` dev). `app.useLogger`
+  + `bufferLogs`. `redact` de `authorization`/`cookie`. El `console.error` del audit interceptor
+  ahora usa el logger inyectado (`PinoLogger`).
+- [x] Correlation ID por petición: header `x-request-id` en cada respuesta (propaga el entrante o
+  genera un UUID). Falta: que el frontend mande uno por operación (follow-up).
 
 ### OBS-4 — Monitoreo de uptime + alertas
 - [ ] UptimeRobot / BetterStack / Cloudflare Health Checks sobre `/health` y `POST /auth/login`

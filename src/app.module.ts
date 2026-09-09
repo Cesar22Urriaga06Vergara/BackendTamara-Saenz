@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'crypto';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { EmpresaModule } from './modules/empresa/empresa.module';
@@ -26,11 +28,46 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
+/**
+ * Nivel de log efectivo: `LOG_LEVEL` manda; si no, `test` → silencio (no ensuciar la salida de
+ * la suite), `production` → `info`, resto → `debug`.
+ */
+function nivelDeLog(): string {
+  if (process.env.LOG_LEVEL) return process.env.LOG_LEVEL;
+  if (process.env.NODE_ENV === 'test') return 'silent';
+  if (process.env.NODE_ENV === 'production') return 'info';
+  return 'debug';
+}
+
 @Module({
   imports: [
     // Primero: engancha Sentry al ciclo de vida de Nest. Sin SENTRY_DSN (ver instrument.ts) es
     // inerte. Debe ir antes que los demás módulos.
     SentryModule.forRoot(),
+    // Logging estructurado (JSON a stdout, que Railway captura) + correlation ID por petición.
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: nivelDeLog(),
+        // Correlation ID: reutiliza el `x-request-id` entrante (si un proxy/futuro frontend lo
+        // manda) o genera uno, y lo devuelve en la respuesta para poder cruzarlo con el cliente.
+        genReqId: (req, res) => {
+          const entrante = req.headers['x-request-id'];
+          const id = (Array.isArray(entrante) ? entrante[0] : entrante) || randomUUID();
+          res.setHeader('x-request-id', id);
+          return id;
+        },
+        // `pino-pretty` (worker thread) SOLO en desarrollo local. En prod y en test: JSON crudo.
+        transport:
+          process.env.NODE_ENV === 'development' ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
+        autoLogging: true,
+        // Nunca loguear credenciales ni cuerpos.
+        redact: ['req.headers.authorization', 'req.headers.cookie'],
+        serializers: {
+          req: (req) => ({ id: req.id, method: req.method, url: req.url }),
+          res: (res) => ({ statusCode: res.statusCode }),
+        },
+      },
+    }),
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
