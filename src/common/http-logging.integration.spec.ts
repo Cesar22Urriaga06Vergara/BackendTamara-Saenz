@@ -22,9 +22,7 @@ describe('Correlation ID (integración) — x-request-id', () => {
   });
 
   it('si el cliente manda x-request-id, la respuesta lo propaga tal cual', async () => {
-    const res = await request(testApp.app.getHttpServer())
-      .get('/health')
-      .set('x-request-id', 'trace-de-prueba-123');
+    const res = await request(testApp.app.getHttpServer()).get('/health').set('x-request-id', 'trace-de-prueba-123');
     expect(res.headers['x-request-id']).toBe('trace-de-prueba-123');
   });
 });
