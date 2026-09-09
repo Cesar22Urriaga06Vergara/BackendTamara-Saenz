@@ -31,24 +31,22 @@ Claude outputs/
 .claude/
 skills-lock.json
 
-# Bloquear reportes locales, análisis y preguntas
-*ANALISIS*
-*PREGUNTAS*
-*auditoria*.md
-*plan*.md
-*fases*.md
-*bitacora*.md
-
 # Bloquear archivos de habilidades recursivos
 SKILL.md
 SKILL.MD
 *SKILL*.md
 
-# Forzar exclusión de otros .md generados por IA en subcarpetas
+# Por defecto NO versionar .md sueltos (borradores/reportes locales de IA)...
 **/*.md
 
-# EXCEPCIONES: docs de proyecto que SÍ se versionan
+# ...salvo la documentación oficial del proyecto, que SÍ va en git (hallazgo S-12):
 !README.md
 !PRODUCCION.md
+!AGENTS.md
+!ARCHITECTURE_AND_AUDIT.md
+!PREGUNTAS_NEGOCIO.md
+!plans/**/*.md
+!documentacion/**/*.md
+!src/**/*.md
 
 node_modules
