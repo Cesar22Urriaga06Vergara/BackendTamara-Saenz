@@ -1,3 +1,4 @@
+import './instrument'; // debe ir PRIMERO: inicializa Sentry antes que cualquier módulo de la app
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, VersioningType } from '@nestjs/common';

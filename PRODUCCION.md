@@ -67,9 +67,14 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
   y el monitor de uptime. Sin `@nestjs/terminus` (v12 es ESM y rompe la suite Jest CJS) — hand-rolled,
   cuerpo con la misma forma (`info`/`error`/`details`). No expone versión ni host.
 
-### OBS-2 — Error reporting
-- [ ] **Sentry** (o equivalente) en **backend y frontend**. Sin esto los fallos se descubren por el cajero, no por un dashboard.
-- [ ] Filtro de excepciones global en el backend que reporte a Sentry y devuelva un error genérico al cliente (hoy solo existe `TypeOrmExceptionFilter` para errores de BD)
+### OBS-2 — Error reporting — 🟡 backend HECHO (plan 019), falta frontend (FE-018)
+- [x] **Sentry backend** (`@sentry/nestjs`): `src/instrument.ts` (init gateado por `SENTRY_DSN`,
+  primer import de `main.ts`), `SentryModule.forRoot()` + `SentryGlobalFilter` (`APP_FILTER`).
+  Sin DSN es inerte. **Operativo**: crear el proyecto Sentry y setear `SENTRY_DSN` en Railway.
+- [ ] **Sentry frontend** → plan FE-018.
+- [x] Filtro global que reporta a Sentry los errores no controlados y devuelve 500 genérico
+  (`SentryGlobalFilter`); `TypeOrmExceptionFilter` sigue traduciendo `QueryFailedError` primero
+  (orden de filtros verificado). Los `HttpException` no se reportan (son "esperados").
 
 ### OBS-3 — Logging estructurado
 - [ ] `nestjs-pino` (o `pino`) con salida JSON y niveles. Hoy: logger por defecto de Nest sin formato + un `console.error` suelto en `audit.interceptor.ts:48`.

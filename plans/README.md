@@ -68,7 +68,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 | 016 | Verificar y asegurar la compatibilidad con MySQL 8 (Railway) | P1 | M | MED | — | **DONE** (2026-09-08) — 25 migraciones + 188 tests verde en MySQL 8.4.11; `type:'mysql'`; CI → `mysql:8.4` |
 | 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **DONE** (2026-09-08) |
 | 018 | Endpoint `/health` + endurecer la CSP | P1 | S | LOW | — | **DONE** (2026-09-08) — hand-rolled (sin `@nestjs/terminus`, v12 es ESM); CSP sin `'unsafe-inline'` en `script-src` |
-| 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **TODO** |
+| 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **DONE** (2026-09-09) — `@sentry/nestjs` v10, inerte sin `SENTRY_DSN` |
 | 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **TODO** |
 | 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **TODO** |
 | 022 | Fijar zona horaria (app + conexión BD) y blindar el manejo de fechas (DATA-2) | P1 | M | MED | — | **TODO** |
@@ -157,9 +157,31 @@ Fix por `overrides` (mismo patrón que BE-014):
 `npm audit` → **0**. `npm ci` + lint + build + `npm test` verde. `multer` sin cobertura de test de
 subida real (no hay spec que haga POST de archivo) — build/tipos OK; el humo de logo va en QA-2.
 
+### Ejecución de 019 (2026-09-09, rama `feat/019-sentry-backend`)
+
+- `@sentry/nestjs` **v10.73** (no v8 como asumía el plan). API igual: `instrument.ts` primero,
+  `SentryModule.forRoot()`, `SentryGlobalFilter` como `APP_FILTER`.
+- `src/instrument.ts`: `Sentry.init` **solo si `SENTRY_DSN`** — inerte en local/test/CI.
+  `sendDefaultPii: false`, `tracesSampleRate` = `SENTRY_TRACES_SAMPLE_RATE` (0.1 por defecto).
+- `src/main.ts`: `import './instrument';` como primerísima línea (sin regla `import/order` en el
+  eslint del repo → no hizo falta `eslint-disable`).
+- `src/app.module.ts`: `SentryModule.forRoot()` primero en `imports`; `{provide: APP_FILTER,
+  useClass: SentryGlobalFilter}` primero en `providers`.
+- **Orden de filtros — verificado leyendo `@nestjs/core@11.1.29`**: los filtros globales se
+  evalúan con `getGlobalFilters().concat(scoped).reverse()` + `.find(primer match)`.
+  `SentryGlobalFilter` (APP_FILTER) se registra durante el scan; `TypeOrmExceptionFilter` se
+  añade después vía `app.useGlobalFilters()` en `main.ts` → tras el `.reverse()` queda **primero**.
+  Resultado: `QueryFailedError` → `TypeOrmExceptionFilter` (409/400/503, sin cambio);
+  todo lo demás no-`HttpException` → `SentryGlobalFilter` (reporta + 500). Los `HttpException`
+  caen en `SentryGlobalFilter` pero su `isExpectedError` los deja pasar sin reportar.
+- Sin cobertura de test nueva con valor (el plan lo dice). `npm test` sigue verde (Sentry sin DSN
+  no interfiere). `.env.example` + README (tabla Railway) + `PRODUCCION.md` OBS-2.
+- **Deferido**: reportar también los 5xx `HttpException` a Sentry (hoy no) — filtro propio si se pide.
+- **Operativo pendiente del dueño**: crear el proyecto Sentry backend y setear `SENTRY_DSN` en Railway.
+
 ### Orden y dependencias (ronda 4)
 
-- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ **HECHOS.** Sigue: 019/020 (observabilidad), 021 (dinero), 022 (TZ) (+ FE-017).
+- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ · ~~**019**~~ **HECHOS.** Sigue: 020 (logs pino), 021 (dinero), 022 (TZ) (+ FE-017).
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021
