@@ -70,7 +70,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 | 018 | Endpoint `/health` + endurecer la CSP | P1 | S | LOW | — | **DONE** (2026-09-08) — hand-rolled (sin `@nestjs/terminus`, v12 es ESM); CSP sin `'unsafe-inline'` en `script-src` |
 | 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **DONE** (2026-09-09) — `@sentry/nestjs` v10, inerte sin `SENTRY_DSN` |
 | 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **DONE** (2026-09-09) — `nestjs-pino` v5; `x-request-id` por petición |
-| 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **TODO** |
+| 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **DONE** (2026-09-09) — 27 columnas / 12 entidades; `Number()` de services limpiados |
 | 022 | Fijar zona horaria (app + conexión BD) y blindar el manejo de fechas (DATA-2) | P1 | M | MED | — | **TODO** |
 
 ### Ejecución de 016 (2026-09-08, rama `migration/016-mysql8-compat`)
@@ -201,9 +201,28 @@ subida real (no hay spec que haga POST de archivo) — build/tipos OK; el humo d
   el aviso "did not exit" de jest por el stream stdout de pino — benigno, el run completo cierra
   limpio; si el CI colgara, añadir un flush en `jest.setup-after-env.ts`).
 
+### Ejecución de 021 (2026-09-09, rama `fix/021-transformer-dinero`)
+
+- `src/common/utils/columna-numerica.transformer.ts` (+ spec, 8 casos): `{ to, from }` — `from`
+  hace `Number(valor)`, conserva `null`. Aplicado a las **27 columnas `decimal(12,2)`** de las
+  **12 entidades** (el plan decía "13" — miscount; 7 arqueo + 3 contrato + 1 empresa + 2 inmueble
+  + 1 movimiento + 1 novedad + 3 obligacion + 2 aplicacion-pago + 1 descuento-deposito + 1
+  detalle-pago + 3 recibo-caja + 2 saldo-favor-credito = 27). No hay decimals no-money (los de
+  mora se retiraron de las entidades).
+- **Step 2 (transformer) — cero cambios de test**: `npm test` pasó igual tras aplicarlo a las 27
+  (los asserts ya hacían `Number(...)` o comparaban numérico). Ningún cálculo cambió.
+- **Step 3 (limpieza `Number()`)**: quitados en `recaudo` (10), `obligaciones` (5), `movimientos`
+  (4), `dashboard` (1), `caja` (1) + `excel-reportes` (7) y `pdf-recibo` (1) — todos sobre campos
+  de entidad. **Conservados** (agregados SQL, TypeORM sí los da como string): `recaudo` L303/L444
+  (`getRawOne`/`SUM`), `movimientos` L337/L352, `dashboard` L61. Fuera de scope: `consecutivo`
+  (contador `int`, no dinero), `auth` (parse de regex), `contratos` L70 (parse de fecha),
+  `pdf-*.formatoMonedaCO` (`Number()` sobre un param ya tipado `number`, defensivo).
+- Test nuevo: `recaudo.integration.spec.ts` — `typeof` de 6 montos tras `registrarPago` = `number`.
+- **Bloquea FE-019**: desplegar 021 antes de que el frontend quite sus `Number()`.
+
 ### Orden y dependencias (ronda 4)
 
-- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ · ~~**019**~~ · ~~**020**~~ **HECHOS.** Sigue: 021 (dinero), 022 (TZ) (+ FE-017).
+- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ · ~~**019**~~ · ~~**020**~~ · ~~**021**~~ **HECHOS.** Sigue: 022 (TZ) (+ FE-017 → FE-018 → FE-019).
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021

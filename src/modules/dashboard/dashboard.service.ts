@@ -36,10 +36,7 @@ export class DashboardService {
     // por cobrar (PENDIENTE/PARCIAL con `fechaVencimiento` ya pasada). Sin costo de mora —
     // retirado por decisión de negocio el 2026-09-01.
     const obligacionesVencidas = await this.obligacionesService.todasPendientes();
-    const carteraTotal = obligacionesVencidas.reduce(
-      (acc, o) => acc + (Number(o.valorOriginal) - Number(o.valorAbonado)),
-      0,
-    );
+    const carteraTotal = obligacionesVencidas.reduce((acc, o) => acc + (o.valorOriginal - o.valorAbonado), 0);
 
     const inicioMes = new Date();
     inicioMes.setDate(1);

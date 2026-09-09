@@ -41,7 +41,7 @@ export class CajaService {
   async saldoEsperadoActual(): Promise<SaldoEsperadoCaja> {
     const empresa = await this.empresaService.obtener();
     const { ingresos, egresos, devoluciones } = await this.movimientosService.desgloseEfectivo();
-    const saldoInicial = Number(empresa.saldoInicialCaja);
+    const saldoInicial = empresa.saldoInicialCaja;
 
     return {
       saldoInicial,

@@ -315,7 +315,7 @@ export class PdfReciboService {
         })
         .text(this.formatoMonedaCO(recibo.valorTotal), { align: 'right' });
       doc.y = yCajaTotal + altoCajaTotal + espaciado.gapPeque;
-      if (Number(recibo.excedente) > 0) {
+      if (recibo.excedente > 0) {
         // Por defecto el excedente se devuelve como cambio; solo queda como saldo a favor
         // cuando el cliente lo pidió expresamente (RDN-01, hallazgo RECAUDO-02 de la auditoría).
         const etiquetaExcedente = recibo.excedenteComoSaldoFavor

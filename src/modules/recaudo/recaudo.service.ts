@@ -68,9 +68,7 @@ export class RecaudoService {
         .andWhere('sf.montoDisponible > 0')
         .orderBy('sf.creadoEn', 'ASC')
         .getMany();
-      const saldoFavorDisponible = redondearMoneda(
-        creditosDisponibles.reduce((acc, c) => acc + Number(c.montoDisponible), 0),
-      );
+      const saldoFavorDisponible = redondearMoneda(creditosDisponibles.reduce((acc, c) => acc + c.montoDisponible, 0));
       const disponible = redondearMoneda(valorTotalPago + saldoFavorDisponible);
 
       // 2) Traer obligaciones con saldo por cobrar del contrato — capital PENDIENTE/PARCIAL
@@ -119,8 +117,8 @@ export class RecaudoService {
       let restantePorDescontar = consumidoDeSaldoFavor;
       for (const credito of creditosDisponibles) {
         if (esCeroMoneda(restantePorDescontar) || restantePorDescontar <= 0) break;
-        const consumir = redondearMoneda(Math.min(restantePorDescontar, Number(credito.montoDisponible)));
-        credito.montoDisponible = redondearMoneda(Number(credito.montoDisponible) - consumir);
+        const consumir = redondearMoneda(Math.min(restantePorDescontar, credito.montoDisponible));
+        credito.montoDisponible = redondearMoneda(credito.montoDisponible - consumir);
         await creditoRepo.save(credito);
         restantePorDescontar = redondearMoneda(restantePorDescontar - consumir);
       }
@@ -264,7 +262,7 @@ export class RecaudoService {
     // Capital, Canon íntegro antes que Novedad (§10).
     for (const obligacion of ordenAplicacion) {
       if (disponible <= 0 || esCeroMoneda(disponible)) break;
-      const saldoCapital = redondearMoneda(Number(obligacion.valorOriginal) - Number(obligacion.valorAbonado));
+      const saldoCapital = redondearMoneda(obligacion.valorOriginal - obligacion.valorAbonado);
       if (saldoCapital <= 0 || esCeroMoneda(saldoCapital)) continue;
 
       const abono = redondearMoneda(Math.min(disponible, saldoCapital));
@@ -479,17 +477,9 @@ export class RecaudoService {
       const aplicaciones = await aplicacionRepo.find({ where: { recibo: { id } }, relations: ['obligacion'] });
       for (const aplicacion of aplicaciones) {
         if ((aplicacion.concepto as string) === 'MORA') {
-          await this.obligacionesService.revertirAbonoMora(
-            aplicacion.obligacion.id,
-            Number(aplicacion.montoAplicado),
-            manager,
-          );
+          await this.obligacionesService.revertirAbonoMora(aplicacion.obligacion.id, aplicacion.montoAplicado, manager);
         } else {
-          await this.obligacionesService.revertirAbono(
-            aplicacion.obligacion.id,
-            Number(aplicacion.montoAplicado),
-            manager,
-          );
+          await this.obligacionesService.revertirAbono(aplicacion.obligacion.id, aplicacion.montoAplicado, manager);
         }
       }
 
@@ -511,12 +501,12 @@ export class RecaudoService {
 
       const creditosGenerados = await creditoRepo.find({ where: { recibo: { id } } });
       for (const credito of creditosGenerados) {
-        if (Number(credito.montoDisponible) <= 0) continue;
+        if (credito.montoDisponible <= 0) continue;
         credito.montoDisponible = 0;
         await creditoRepo.save(credito);
       }
 
-      const consumido = Number(recibo.saldoFavorConsumido ?? 0);
+      const consumido = recibo.saldoFavorConsumido ?? 0;
       if (consumido > 0) {
         await creditoRepo.save(
           creditoRepo.create({
@@ -659,7 +649,7 @@ export class RecaudoService {
       }
 
       const valorDevolucion = redondearMoneda(
-        Math.max(0, Number(contrato.depositoGarantia) - valorDescuentosGeneral - deudaRealAplicada),
+        Math.max(0, contrato.depositoGarantia - valorDescuentosGeneral - deudaRealAplicada),
       );
 
       if (valorDevolucion > 0) {
@@ -745,11 +735,11 @@ export class RecaudoService {
           totalDeuda: 0,
           obligacionesVencidas: 0,
           fechaMasAntigua: fechaVenc,
-          saldoAFavor: Number(c.saldoAFavor ?? 0),
+          saldoAFavor: c.saldoAFavor ?? 0,
         };
         porContrato.set(c.id, fila);
       }
-      const capital = Math.max(0, Number(o.valorOriginal) - Number(o.valorAbonado));
+      const capital = Math.max(0, o.valorOriginal - o.valorAbonado);
       fila.totalCapitalVencido += capital;
       fila.totalDeuda += capital;
       fila.obligacionesVencidas += 1;

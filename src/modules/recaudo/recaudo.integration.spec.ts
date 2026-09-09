@@ -106,6 +106,28 @@ describe('RecaudoService (integración) — orden de aplicación Canon → Noved
     expect(Number(recibo.excedente)).toBe(0);
   });
 
+  it('D-1: los montos de dinero se hidratan como number, no como string (transformer columnaNumerica)', async () => {
+    const { contrato, canon } = await armarEscenarioOficial();
+
+    const recibo = await recaudo.registrarPago(
+      dtoPago(contrato.id, [{ medioPago: MedioPago.EFECTIVO, monto: 400000 }]),
+      'admin@test.com',
+    );
+    const canonRecargado = await recargarObligacion(testApp.dataSource, canon.id);
+    const [contratoRecargado] = await testApp.dataSource.getRepository(Contrato).find({ where: { id: contrato.id } });
+
+    for (const monto of [
+      recibo.valorTotal,
+      recibo.excedente,
+      canonRecargado.valorOriginal,
+      canonRecargado.valorAbonado,
+      contratoRecargado.canonValor,
+      contratoRecargado.saldoAFavor,
+    ]) {
+      expect(typeof monto).toBe('number');
+    }
+  });
+
   it('el concepto del movimiento de recaudo muestra el nombre del cliente, no su UUID', async () => {
     await configurarEmpresa(testApp.dataSource, {});
     const cliente = await crearCliente(testApp.dataSource, { nombreCompleto: 'Ana Pérez' });

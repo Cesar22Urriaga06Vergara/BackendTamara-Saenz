@@ -315,8 +315,8 @@ export class ObligacionesService {
       .where('o.id = :id', { id })
       .getOneOrFail();
 
-    obligacion.valorAbonado = redondearMoneda(Number(obligacion.valorAbonado) + monto);
-    const saldoRestante = Number(obligacion.valorOriginal) - Number(obligacion.valorAbonado);
+    obligacion.valorAbonado = redondearMoneda(obligacion.valorAbonado + monto);
+    const saldoRestante = obligacion.valorOriginal - obligacion.valorAbonado;
     obligacion.estado =
       saldoRestante <= 0 || esCeroMoneda(saldoRestante) ? EstadoObligacion.PAGADA : EstadoObligacion.PARCIAL;
 
@@ -337,12 +337,12 @@ export class ObligacionesService {
       .where('o.id = :id', { id })
       .getOneOrFail();
 
-    const restante = redondearMoneda(Number(obligacion.valorAbonado) - monto);
+    const restante = redondearMoneda(obligacion.valorAbonado - monto);
     obligacion.valorAbonado = esCeroMoneda(restante) ? 0 : Math.max(0, restante);
     obligacion.estado =
       obligacion.valorAbonado <= 0
         ? EstadoObligacion.PENDIENTE
-        : Number(obligacion.valorAbonado) >= Number(obligacion.valorOriginal)
+        : obligacion.valorAbonado >= obligacion.valorOriginal
           ? EstadoObligacion.PAGADA
           : EstadoObligacion.PARCIAL;
 
@@ -362,7 +362,7 @@ export class ObligacionesService {
       .setLock('pessimistic_write')
       .where('o.id = :id', { id })
       .getOneOrFail();
-    const restante = redondearMoneda(Number(obligacion.valorMoraPagada) - monto);
+    const restante = redondearMoneda(obligacion.valorMoraPagada - monto);
     obligacion.valorMoraPagada = esCeroMoneda(restante) ? 0 : Math.max(0, restante);
     return repo.save(obligacion);
   }
