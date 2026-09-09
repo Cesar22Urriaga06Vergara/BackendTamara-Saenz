@@ -67,7 +67,7 @@ backend + MySQL 8 en **Railway**, frontend en **Cloudflare Pages**.
 | 015 | Configurar el despliegue del backend en Railway (Dockerfile, `railway.json`, `engines`, matriz de env) | P1 | M | LOW | — | **DONE** (2026-09-08) |
 | 016 | Verificar y asegurar la compatibilidad con MySQL 8 (Railway) | P1 | M | MED | — | **DONE** (2026-09-08) — 25 migraciones + 188 tests verde en MySQL 8.4.11; `type:'mysql'`; CI → `mysql:8.4` |
 | 017 | Mover el logo de empresa a almacenamiento persistente (Railway Volume) | P1 | S | LOW | — | **DONE** (2026-09-08) |
-| 018 | Endpoint `/health` (`@nestjs/terminus`) + endurecer la CSP | P1 | S | LOW | — | **TODO** |
+| 018 | Endpoint `/health` + endurecer la CSP | P1 | S | LOW | — | **DONE** (2026-09-08) — hand-rolled (sin `@nestjs/terminus`, v12 es ESM); CSP sin `'unsafe-inline'` en `script-src` |
 | 019 | Error reporting con Sentry en el backend | P1 | S | LOW | — | **TODO** |
 | 020 | Logging estructurado (pino) + correlation IDs | P1 | M | LOW-MED | — | **TODO** |
 | 021 | Transformer `decimal ↔ number` en las columnas de dinero (D-1/D-4) | P1 | M | MED | — | **TODO** |
@@ -119,9 +119,29 @@ Verificado contra **MySQL 8.4.11** real (zip portable, sin Docker) en el puerto 
 - `.env.example` + README ("Volumen de uploads"): variable `UPLOADS_DIR`.
 - **Operativo pendiente**: Railway Volume + `UPLOADS_DIR=/data/uploads`.
 
+### Ejecución de 018 (2026-09-08, rama `feat/018-health-csp`)
+
+- **`@nestjs/terminus` descartado**: la v12 (única compatible con Nest 11) es **ESM puro**
+  (`import.meta.url`, `export` en `dist/index.js`) y revienta la suite Jest CJS del repo
+  (`ts-jest`, `module: commonjs`) — ni `transformIgnorePatterns` lo salva. Downgrade a v10 = peer
+  mismatch con Nest 11. Se hizo **a mano**: `HealthController` inyecta el `DataSource`, hace
+  `SELECT 1` con timeout de 3 s (`Promise.race`), responde 200 `{status:'ok',info:{database:{status:'up'}}}`
+  o 503 `{status:'error',error:{database:{status:'down'}}}`. Cuerpo con la misma forma que terminus
+  (`info`/`error`/`details`) por si un monitor lo parsea. Cero dependencias nuevas de runtime.
+- `@Public()` en el handler (lo respetan `JwtAuthGuard` **y** `RolesGuard` vía `IS_PUBLIC_KEY`).
+  `AuditInterceptor` no lo toca (no lleva `@AuditAction()`).
+- `HealthModule` sin `imports` (el `DataSource` por defecto es inyectable app-wide).
+- `src/main.ts`: `script-src` pierde `'unsafe-inline'` (queda solo en `style-src`, para Swagger
+  opt-in); + `object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`.
+- Test: `src/modules/health/health.integration.spec.ts` con **`supertest`** (nuevo devDep, +
+  `@types/supertest`) contra `bootstrapTestApp()` — 200 sin token + body shape + no-401/403.
+- **Verificado local**: `npm run lint` + `npm run build` limpios. **La suite de integración NO se
+  pudo correr en local** (no hay MySQL 8 en `:3306` en esta máquina; el server que estaba se
+  apagó a mitad de sesión). Queda a cargo del CI (`mysql:8.4`, corre en el PR).
+
 ### Orden y dependencias (ronda 4)
 
-- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ **HECHOS.** Sigue: 018 (+ FE-017).
+- ~~**016**~~ · ~~**015**~~ · ~~**017**~~ · ~~**018**~~ **HECHOS.** Sigue: 019/020 (observabilidad), 021 (dinero), 022 (TZ) (+ FE-017).
 - **015 + 017 + 018** habilitan el primer deploy a staging (config + logo persistente + healthcheck).
 - **019 + 020** dan visibilidad antes de exponer a usuarios.
 - **021** bloquea al plan **FE-019** (limpieza del dinero-como-string en el frontend) — desplegar 021

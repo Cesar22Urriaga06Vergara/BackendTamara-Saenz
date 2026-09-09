@@ -17,16 +17,21 @@ async function bootstrap() {
   // Aborta el arranque si el secreto que firma los access tokens es débil o de ejemplo (S-1).
   validarSecretoJwt(config.get<string>('JWT_ACCESS_SECRET'));
 
-  // Cabeceras de seguridad (nosniff, frameguard, HSTS, referrer-policy, etc.). La CSP se
-  // relaja lo justo para que Swagger UI (solo con SWAGGER_ENABLED=true) siga cargando su bundle.
+  // Cabeceras de seguridad (nosniff, frameguard, HSTS, referrer-policy, etc.). El backend solo
+  // sirve `/api` (JSON) y `/uploads` (estáticos); el frontend es una app aparte en Cloudflare
+  // Pages, así que la CSP puede ser estricta. Swagger (solo con SWAGGER_ENABLED=true, apagado en
+  // prod) necesita `'unsafe-inline'` en `style-src`; el `script-src` ya no lo lleva.
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
           'default-src': ["'self'"],
-          'script-src': ["'self'", "'unsafe-inline'"],
-          'style-src': ["'self'", "'unsafe-inline'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"], // Swagger UI y algunos estilos inline propios
           'img-src': ["'self'", 'data:'],
+          'object-src': ["'none'"],
+          'frame-ancestors': ["'none'"],
+          'base-uri': ["'self'"],
         },
       },
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // el logo en /uploads lo consume el frontend en otro origen

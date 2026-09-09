@@ -50,7 +50,7 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 ### DEPLOY-1 — Configuración de plataforma
 - [x] **Backend Railway** — `Dockerfile` multi-stage + `railway.json` (`startCommand`, `healthcheckPath`, restart policy) + `tsconfig.build.json` (build determinista, `dist/main.js`) + `engines` + `.nvmrc` + script `deploy:migrate` + `app.listen(port, '0.0.0.0')` + matriz de variables en el README. **→ plan 015 (hecho, 2026-09-08)**. Verificado: `npm ci` + build + `npm ci --omit=dev` + `node dist/main` + `deploy:migrate` cargan bien.
 - [ ] **Frontend Cloudflare** — Nitro preset + `_headers` + env + `engines` → **plan FE-017**.
-- [ ] **`healthcheckPath` de `railway.json`** apunta a `/api/v1/health` que **aún no existe** → requiere **plan 018**; hasta entonces quitar esas líneas o el deploy sale "no sano".
+- [x] **`healthcheckPath` de `railway.json`** apunta a `/api/v1/health` — ya existe (plan 018, 2026-09-08).
 - [ ] **Variables de entorno en producción** (lista completa en el README, sección "Despliegue (Railway)").
 - [ ] **CORS**: `CORS_ORIGIN` = dominio exacto de Cloudflare Pages (no `*`, no `localhost`) — setear al cablear los dominios.
 - [ ] **Dominio propio** + registros DNS en Cloudflare apuntando a Pages (frontend) y CNAME a Railway (backend).
@@ -61,8 +61,11 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 - [ ] **Probar un restore** en un proyecto Railway aparte — un backup no probado no es un backup
 - [ ] Documentar el procedimiento de restore en este archivo
 
-### OBS-1 — Health check
-- [ ] Endpoint **`/health`** (sin auth) con `@nestjs/terminus`: chequea DB + memoria. Lo consume el healthcheck de Railway y el monitor de uptime.
+### OBS-1 — Health check — ✅ HECHO (plan 018, 2026-09-08)
+- [x] Endpoint **`GET /api/v1/health`** (sin auth, `@Public()`): pinga la BD (`SELECT 1`, timeout 3 s),
+  200 `{status:'ok',...}` / 503 `{status:'error',...}`. Lo consume el healthcheck de `railway.json`
+  y el monitor de uptime. Sin `@nestjs/terminus` (v12 es ESM y rompe la suite Jest CJS) — hand-rolled,
+  cuerpo con la misma forma (`info`/`error`/`details`). No expone versión ni host.
 
 ### OBS-2 — Error reporting
 - [ ] **Sentry** (o equivalente) en **backend y frontend**. Sin esto los fallos se descubren por el cajero, no por un dashboard.
@@ -83,7 +86,9 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 
 ### SEC-2 — Cabeceras de seguridad del frontend
 - [ ] `nuxt.config.ts` **no tiene ninguna**. En Cloudflare Pages: archivo **`_headers`** o Transform Rules con CSP, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`
-- [ ] Revisar la CSP del **backend** (`main.ts:20`): hoy `script-src 'unsafe-inline'` (permisivo). Endurecer ahora que Swagger es opt-in.
+- [x] Revisar la CSP del **backend** (`main.ts`) — ✅ HECHO (plan 018): `script-src` ya no lleva
+  `'unsafe-inline'` (solo `style-src`, para Swagger opt-in); + `object-src 'none'`,
+  `frame-ancestors 'none'`, `base-uri 'self'`.
 
 ### DATA-1 — Dinero como `decimal` → string en el JSON (D-1 / D-4)
 El backend serializa los `decimal` de MySQL como **string**; el frontend lo parchea con `Number()`

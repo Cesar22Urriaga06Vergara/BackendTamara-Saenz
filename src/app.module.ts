@@ -19,6 +19,7 @@ import { RecaudoModule } from './modules/recaudo/recaudo.module';
 import { DocumentosModule } from './modules/documentos/documentos.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { HealthModule } from './modules/health/health.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -62,6 +63,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     DocumentosModule,
     AuditoriaModule,
     DashboardModule,
+    HealthModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
