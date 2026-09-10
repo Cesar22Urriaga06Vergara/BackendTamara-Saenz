@@ -469,6 +469,11 @@ export class RecaudoService {
       if (recibo.estado === EstadoRecibo.ANULADO) {
         throw new BadRequestException('Este recibo ya se encuentra anulado.');
       }
+      if (recibo.esLiquidacionDeposito) {
+        throw new BadRequestException(
+          'Los recibos internos de liquidación de depósito deben reversarse desde Movimientos.',
+        );
+      }
 
       // 1) Revertir cada aplicación exacta sobre su obligación de origen. El flujo actual solo
       // crea `CAPITAL`; la compatibilidad con registros legacy con `concepto = 'MORA'` se
@@ -590,6 +595,9 @@ export class RecaudoService {
       const deudaAAplicar = redondearMoneda(
         descuentos.filter((d) => d.tipo === TipoDescuentoDeposito.DEUDA).reduce((acc, d) => acc + d.valor, 0),
       );
+      if (valorDescuentosGeneral + deudaAAplicar > contrato.depositoGarantia) {
+        throw new BadRequestException('El total de descuentos supera el depósito disponible.');
+      }
       let deudaRealAplicada = 0;
       if (deudaAAplicar > 0) {
         const obligacionesPend = await manager

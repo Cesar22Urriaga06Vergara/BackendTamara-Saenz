@@ -21,6 +21,9 @@ export enum EstadoObligacion {
  * decisión de negocio el 2026-09-01).
  */
 @Entity('obligacion')
+// P-4: la cartera vencida (`condicionCarteraVencida`, dashboard, reporte) filtra
+// `estado IN (...) AND fechaVencimiento <= :hoy` — índice compuesto en ese orden.
+@Index('IDX_obligacion_estado_venc', ['estado', 'fechaVencimiento'])
 export class Obligacion {
   @PrimaryGeneratedColumn('uuid')
   id: string;

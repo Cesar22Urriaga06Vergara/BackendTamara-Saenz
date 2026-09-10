@@ -5,7 +5,7 @@ import { Movimiento, OrigenMovimiento } from '../movimientos/entities/movimiento
 import { Contrato, EstadoContrato } from '../contratos/entities/contrato.entity';
 import { Cliente } from '../personas/entities/cliente.entity';
 import { DescuentoDeposito } from './entities/descuento-deposito.entity';
-import { ReciboCaja } from './entities/recibo-caja.entity';
+import { EstadoRecibo, ReciboCaja } from './entities/recibo-caja.entity';
 import { SaldoFavorCredito } from './entities/saldo-favor-credito.entity';
 import { ConceptoAplicacion } from './entities/aplicacion-pago.entity';
 import { RegistrarPagoDto } from './dto/registrar-pago.dto';
@@ -733,6 +733,65 @@ describe('RecaudoService (integración) — DEP-01', () => {
         'admin@test.com',
       ),
     ).rejects.toThrow('supera la deuda pendiente');
+  });
+
+  it('rechaza anular directamente el recibo interno de una liquidación de depósito', async () => {
+    await configurarEmpresa(testApp.dataSource, {});
+    const cliente = await crearCliente(testApp.dataSource);
+    const inmueble = await crearInmueble(testApp.dataSource);
+    const contrato = await crearContrato(testApp.dataSource, cliente, inmueble, {
+      estado: EstadoContrato.TERMINADO,
+      fechaFin: new Date(),
+      depositoGarantia: 500000,
+    });
+    const canon = await crearObligacion(testApp.dataSource, contrato, {
+      tipo: TipoObligacion.CANON,
+      valorOriginal: 200000,
+      diasVencida: 4,
+    });
+
+    await recaudo.liquidarDeposito(
+      contrato.id,
+      {
+        descuentos: [{ concepto: 'Arriendo debido', valor: 200000, tipo: 'DEUDA' as any }],
+        medioPago: MedioPago.EFECTIVO,
+      },
+      'admin@test.com',
+    );
+    const reciboInterno = await testApp.dataSource
+      .getRepository(ReciboCaja)
+      .findOneOrFail({ where: { contrato: { id: contrato.id }, esLiquidacionDeposito: true } });
+
+    await expect(recaudo.anular(reciboInterno.id, { motivo: 'Intento directo' }, 'admin@test.com')).rejects.toThrow(
+      'Los recibos internos de liquidación de depósito deben reversarse desde Movimientos',
+    );
+
+    const canonSinCambios = await recargarObligacion(testApp.dataSource, canon.id);
+    expect(Number(canonSinCambios.valorAbonado)).toBe(200000);
+    const reciboSinCambios = await testApp.dataSource
+      .getRepository(ReciboCaja)
+      .findOneByOrFail({ id: reciboInterno.id });
+    expect(reciboSinCambios.estado).toBe(EstadoRecibo.EMITIDO);
+  });
+
+  it('rechaza descuentos generales que superan el depósito y revierte toda la operación', async () => {
+    const contrato = await crearContratoTerminadoConDeposito(100000);
+
+    await expect(
+      recaudo.liquidarDeposito(
+        contrato.id,
+        { descuentos: [{ concepto: 'Daño superior al depósito', valor: 100001 }], medioPago: MedioPago.EFECTIVO },
+        'admin@test.com',
+      ),
+    ).rejects.toThrow('supera el depósito disponible');
+
+    const contratoSinCambios = await testApp.dataSource.getRepository(Contrato).findOneByOrFail({ id: contrato.id });
+    expect(Number(contratoSinCambios.depositoGarantia)).toBe(100000);
+    expect(contratoSinCambios.depositoLiquidadoEn).toBeNull();
+    const descuentos = await testApp.dataSource
+      .getRepository(DescuentoDeposito)
+      .find({ where: { contrato: { id: contrato.id } } });
+    expect(descuentos).toHaveLength(0);
   });
 
   it('sin descuentos, devuelve el depósito completo sin crear ningún descuento', async () => {

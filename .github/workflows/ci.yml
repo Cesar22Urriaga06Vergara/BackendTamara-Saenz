@@ -16,7 +16,7 @@ jobs:
       mysql:
         image: mysql:8.4
         env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
           MYSQL_DATABASE: tamara_saenz_db_test
         ports:
           - 3306:3306
@@ -28,6 +28,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Escaneo de secretos
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -47,6 +54,16 @@ jobs:
 
       - name: Type-check / build
         run: npm run build
+
+      - name: Migraciones contra MySQL 8
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USERNAME: root
+          DB_PASSWORD: ''
+          DB_DATABASE: tamara_saenz_db_test
+          DB_SYNCHRONIZE: 'false'
+        run: npm run migration:run
 
       # No hace falta declarar variables DB_*/JWT_*/etc. aquí: `test/jest.setup.ts` carga
       # `.env.test` (ya commiteado, con `DB_HOST=localhost`) con `override: true` antes de

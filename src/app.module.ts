@@ -28,6 +28,7 @@ import { HealthModule } from './modules/health/health.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { validarConfiguracionProduccion } from './common/utils/validar-configuracion-produccion.util';
 
 /**
  * Nivel de log efectivo: `LOG_LEVEL` manda; si no, `test` → silencio (no ensuciar la salida de
@@ -69,7 +70,13 @@ function nivelDeLog(): string {
         },
       },
     }),
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: (config) => {
+        validarConfiguracionProduccion(config);
+        return config;
+      },
+    }),
     // Rate-limit GLOBAL por IP para toda la API (200 req/min). `/auth/login` lo baja a 5/min
     // (`@Throttle` en el controller) y `/health` lo salta (`@SkipThrottle`). Detrás de Railway
     // hay que fijar `TRUST_PROXY` para que la IP contada sea la del cliente, no la del proxy.

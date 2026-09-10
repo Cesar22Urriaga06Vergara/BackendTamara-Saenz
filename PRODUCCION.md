@@ -18,7 +18,7 @@
 | Pieza | Plataforma | Notas |
 |---|---|---|
 | Backend (NestJS) | **Railway** (servicio) | Auto-deploy desde `main`. TLS en el edge de Railway. **`TZ` sin definir** (proceso en UTC, igual que el plugin MySQL — ver DATA-2). |
-| Base de datos | **Railway** (plugin MySQL 8) | Código en `type: 'mysql'` (DB-1 hecho, plan BE-016). Las 25 migraciones + 212 tests verde contra MySQL 8. |
+| Base de datos | **Railway** (plugin MySQL 8) | Código en `type: 'mysql'` (DB-1 hecho, plan BE-016). Las 26 migraciones + 227 tests se validan en CI contra MySQL 8. |
 | Frontend (Nuxt) | **Cloudflare Pages** | SPA estática (`ssr: false`, output `dist/`). DNS + CDN + SSL + WAF de Cloudflare. Build: `npm run generate`. |
 | Archivos subidos (logo empresa) | **Railway Volume** | Código listo (`UPLOADS_DIR`, plan 017). Falta crear el Volume + setear la variable (DB-2 operativo). |
 
@@ -32,20 +32,25 @@ y CI/CD de despliegue (deploy en cada push a `main`). Lo que sigue es lo que **n
 CI verde en ambos repos · `npm audit` 0 (backend) · rate-limit en `/auth/login` (5/min) ·
 CORS por env (no wildcard) · Helmet + **CSP endurecida** (sin `'unsafe-inline'` en `script-src`) ·
 `ValidationPipe` global (whitelist + forbidNonWhitelisted) · JWT + RolesGuard ·
-`synchronize:false` gateado por env · 25 migraciones aplicadas en la BD local ·
+`synchronize:false` gateado por env · 26 migraciones versionadas ·
+guardia de configuración crítica en producción durante el bootstrap ·
 cron diario de cánones · trazabilidad de auditoría persistida · guardia de arranque de secreto JWT ·
 `SWAGGER_ENABLED` opt-in · seed sin contraseñas publicadas · `TRUST_PROXY` configurable ·
 **`GET /api/v1/health`** (plan 018) · **Sentry** back + front gateado por DSN (019, FE-018) ·
 **logging JSON `pino` + `x-request-id`** (020) · **dinero `decimal→number`** en toda la API (021) ·
 **"hoy de negocio" en Bogotá** para cartera/canon (022) · frontend **SPA Cloudflare Pages + `_headers`**
-(FE-017). 212 tests backend / 22 frontend.
+(FE-017). 229 tests backend / 33 frontend.
+
+Controles financieros reforzados: recibos internos de liquidación de depósito solo se reversan desde
+Movimientos; los descuentos no pueden superar el depósito disponible; cambios de estado de novedades
+usan lock transaccional contra aprobaciones financieras.
 
 ---
 
 ## 🔴 BLOQUEANTE — no se puede ir a producción sin esto
 
 ### DB-1 — Compatibilidad MariaDB → MySQL 8 (Railway) — ✅ HECHO (plan BE-016, 2026-09-08)
-- [x] Verificado contra **MySQL 8.4.11** real: las **25 migraciones** corren limpio (incluidas las
+- [x] Verificado contra **MySQL 8.4.11** real: las **26 migraciones** corren limpio (incluidas las
   2 con columnas `GENERATED STORED`), son idempotentes, y la **suite de 188 tests** pasa (con
   `synchronize:true` generando el esquema desde entidades).
 - [x] `type: 'mariadb'` → **`type: 'mysql'`** en `app.module.ts` y `data-source.ts` (re-verificado).
@@ -104,7 +109,7 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
   + `bufferLogs`. `redact` de `authorization`/`cookie`. El `console.error` del audit interceptor
   ahora usa el logger inyectado (`PinoLogger`).
 - [x] Correlation ID por petición: header `x-request-id` en cada respuesta (propaga el entrante o
-  genera un UUID). Falta: que el frontend mande uno por operación (follow-up).
+  genera un UUID) y el frontend lo envía por operación para correlacionar logs y errores.
 
 ### OBS-4 — Monitoreo de uptime + alertas
 - [ ] UptimeRobot / BetterStack / Cloudflare Health Checks sobre `/health` y `POST /auth/login`
@@ -180,14 +185,14 @@ cron diario de cánones · trazabilidad de auditoría persistida · guardia de a
 
 - [x] **FE-014** — deps muertas fuera + `overrides` js-yaml/svgo + `npm audit` en el CI del front
   (PR #5). **FE-014b**: `pinia ^4` + `.nvmrc` a Node 22 LTS (PR #7).
-- [ ] **secret scanning** (gitleaks) en ambos CI. (`npm audit` ya está en los dos CI.)
+- [x] **secret scanning** (gitleaks) en ambos CI. (`npm audit` también está en los dos CI.)
 - [x] **S-10** — cron diario `RefreshTokenCron.podar()` (borra expirados + revocados > 7 días;
   conserva revocados recientes como ventana para detección de reuso). La **detección de reuso**
   en sí sigue pendiente (plan propio).
 - [ ] **P-4** — índices compuestos (`obligacion(estado,fechaVencimiento)`, `recibo_caja.creadoEn`,
   `movimiento(medioPago,tipo,esReverso)`) — migración. _(en curso, misma tanda)_
-- [ ] **Política de contraseñas** — regex mayúscula+dígito en los DTOs. Lockout tras N intentos
-  lo mitiga hoy el rate-limit de 5/min en `/auth/login`. _(en curso, misma tanda)_
+- [x] **Política de contraseñas** — mínimo 8 caracteres, mayúscula y dígito en los DTOs y en el
+  seed. Lockout tras N intentos lo mitiga hoy el rate-limit de 5/min en `/auth/login`.
 - [ ] **Accesibilidad** — pasada WCAG AA. Sin auditar.
 - [x] **Rate-limit global** — `ThrottlerModule` global (200/min por IP), `/auth/login` 5/min,
   `/health` exento. ⚠️ Requiere `TRUST_PROXY` seteado en Railway para contar la IP del cliente.

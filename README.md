@@ -103,7 +103,7 @@ npm run start:dev
 ```
 
 El proyecto se prueba y ejecuta contra **MySQL 8** (driver mysql2; en producción, el plugin MySQL
-de Railway). Verificado 2026-09-08: las 25 migraciones + los 188 tests corren limpio contra
+de Railway). Verificado: las 26 migraciones + los 227 tests corren limpio contra
 MySQL 8.4.11 (plan BE-016). El backend **no arranca** si `JWT_ACCESS_SECRET` es corto (<32) o un
 valor de ejemplo.
 
