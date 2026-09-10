@@ -27,6 +27,17 @@ se marca **NO DETERMINADO / REQUIERE VALIDACIÓN** en vez de inventarlo.
 >   `hoyNegocioISO()` para cartera/canon (022).
 > - Frontend desplegable a Cloudflare Pages (SPA estática, FE-017) + Sentry (FE-018).
 
+> **Línea base verificada el 2026-09-10:** `npm test` pasa con **214 tests en 32 suites**; `npm run
+> lint` y `npm run build` pasan. Esta verificación no sustituye una auditoría funcional completa ni
+> valida por sí sola las afirmaciones históricas de este documento.
+
+> La línea base actualizada tras las guardias de producción y la migración P-4 es de **227 tests** y
+> **26 migraciones TypeScript**. El CI ejecuta `migration:run` contra MySQL 8 efímero antes de la suite.
+
+> La revisión financiera final del 2026-09-10 añadió guardias contra descuentos de depósito sobredimensionados,
+> anulación directa de recibos internos y carreras entre estado/aprobación de novedades. La suite actual es
+> de **229 tests**.
+
 ---
 
 ## 1. Resumen ejecutivo

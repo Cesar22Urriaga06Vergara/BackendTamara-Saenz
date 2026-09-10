@@ -21,6 +21,9 @@ export enum OrigenMovimiento {
  * exigida por el módulo de Auditoría.
  */
 @Entity('movimiento')
+// P-4: `MovimientosService` suma efectivo por `medioPago = :m AND tipo = :t [AND esReverso = :r]`
+// (desglose de caja, saldo esperado). Índice compuesto en ese orden.
+@Index('IDX_movimiento_caja', ['medioPago', 'tipo', 'esReverso'])
 export class Movimiento {
   @PrimaryGeneratedColumn('uuid')
   id: string;

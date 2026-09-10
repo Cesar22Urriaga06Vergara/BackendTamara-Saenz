@@ -103,7 +103,7 @@ npm run start:dev
 ```
 
 El proyecto se prueba y ejecuta contra **MySQL 8** (driver mysql2; en producción, el plugin MySQL
-de Railway). Verificado 2026-09-08: las 25 migraciones + los 188 tests corren limpio contra
+de Railway). Verificado: las 26 migraciones + los 227 tests corren limpio contra
 MySQL 8.4.11 (plan BE-016). El backend **no arranca** si `JWT_ACCESS_SECRET` es corto (<32) o un
 valor de ejemplo.
 
@@ -152,6 +152,7 @@ El backend se despliega en **Railway** como servicio Docker (`Dockerfile` multi-
 | `DB_DATABASE` | `${{MySQL.MYSQLDATABASE}}` | |
 | `DB_SYNCHRONIZE` | `false` | producción usa migraciones |
 | `DB_LOGGING` | `false` | |
+| `DB_POOL_SIZE` | `10` | pool de conexiones; ajustar al máx. del plugin MySQL de Railway |
 | `EMPRESA_NOMBRE` / `EMPRESA_NIT` / `EMPRESA_SLOGAN` | *(datos reales)* | solo se usan en el primer seed |
 | `HORIZONTE_MESES_CANON` | `3` | |
 | `SENTRY_DSN` | *(DSN del proyecto Sentry backend)* | vacío = desactivado; un 500 en prod debe aparecer en Sentry |

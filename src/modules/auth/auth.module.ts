@@ -3,11 +3,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { RefreshTokenCron } from './refresh-token.cron';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 
 @Module({
@@ -23,13 +23,9 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
         signOptions: { expiresIn: cfg.get('JWT_ACCESS_EXPIRES_IN', '15m') },
       }),
     }),
-    // AUD-019: registrado aquí (no global) porque ThrottlerGuard solo se usa en
-    // POST /auth/login (@UseGuards en AuthController); un módulo con @UseGuards
-    // local necesita que el módulo del proveedor esté importado en el mismo lugar.
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60000, limit: 5 }] }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, RefreshTokenCron],
   exports: [AuthService],
 })
 export class AuthModule {}

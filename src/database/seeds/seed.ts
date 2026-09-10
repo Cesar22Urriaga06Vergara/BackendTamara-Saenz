@@ -5,19 +5,20 @@ import { Empresa } from '../../modules/empresa/entities/empresa.entity';
 import { Consecutivo } from '../../modules/empresa/entities/consecutivo.entity';
 import { Usuario } from '../../modules/usuarios/entities/usuario.entity';
 import { Rol } from '../../common/enums/roles.enum';
+import { validarPasswordSegura } from '../../common/utils/password-policy.util';
 
 /**
- * Exige que la contraseña semilla venga por variable de entorno (>= 8 caracteres). Antes había
+ * Exige que la contraseña semilla venga por variable de entorno (>= 8 caracteres, una mayúscula y un dígito). Antes había
  * un fallback hardcodeado (`'Admin#2026'`) que además estaba publicado en `.env.example`
  * commiteado (hallazgo S-2): si el despliegue real no la definía, la cuenta de Administrador
  * quedaba con una contraseña que está en el repositorio.
  */
 function exigirPasswordSemilla(variable: 'SEED_ADMIN_PASSWORD' | 'SEED_RECEPCION_PASSWORD'): string {
   const valor = process.env[variable];
-  if (!valor || valor.length < 8) {
-    throw new Error(`${variable} debe estar definida (>= 8 caracteres) para sembrar el usuario correspondiente.`);
+  if (!valor) {
+    throw new Error(`${variable} debe estar definida para sembrar el usuario correspondiente.`);
   }
-  return valor;
+  return validarPasswordSegura(valor, variable);
 }
 
 /**

@@ -75,6 +75,8 @@ export class ReciboCaja {
   @Column({ length: 150 })
   registradoPorEmail: string;
 
+  // P-4: el dashboard filtra el "recaudo del mes" por `creadoEn >= :inicioMes`.
+  @Index('IDX_recibo_caja_creado_en')
   @CreateDateColumn()
   creadoEn: Date;
 }

@@ -104,20 +104,30 @@ export class NovedadesService {
    * Administrador" (AUD-031).
    */
   async cambiarEstado(id: string, dto: CambiarEstadoNovedadDto, rol: string): Promise<Novedad> {
-    const novedad = await this.obtener(id);
-    if (novedad.estado === EstadoNovedad.CERRADA || novedad.estado === EstadoNovedad.ANULADA) {
-      throw new BadRequestException('La novedad ya está concluida y no admite cambios de estado.');
-    }
-    const concluyeSinResolver =
-      (dto.estado === EstadoNovedad.ANULADA || dto.estado === EstadoNovedad.CERRADA) &&
-      novedad.impactoFinanciero === ImpactoFinanciero.PENDIENTE;
-    if (concluyeSinResolver && rol !== Rol.ADMINISTRADOR) {
-      throw new ForbiddenException(
-        'Esta novedad aún no tiene impacto financiero resuelto; solo el Administrador puede cerrarla o anularla.',
-      );
-    }
-    novedad.estado = dto.estado;
-    return this.repo.save(novedad);
+    return this.dataSource.transaction(async (manager) => {
+      const novedad = await manager
+        .createQueryBuilder(Novedad, 'n')
+        .setLock('pessimistic_write')
+        .leftJoinAndSelect('n.inmueble', 'inmueble')
+        .leftJoinAndSelect('n.contrato', 'contrato')
+        .leftJoinAndSelect('contrato.cliente', 'cliente')
+        .where('n.id = :id', { id })
+        .getOne();
+      if (!novedad) throw new NotFoundException('Novedad no encontrada.');
+      if (novedad.estado === EstadoNovedad.CERRADA || novedad.estado === EstadoNovedad.ANULADA) {
+        throw new BadRequestException('La novedad ya está concluida y no admite cambios de estado.');
+      }
+      const concluyeSinResolver =
+        (dto.estado === EstadoNovedad.ANULADA || dto.estado === EstadoNovedad.CERRADA) &&
+        novedad.impactoFinanciero === ImpactoFinanciero.PENDIENTE;
+      if (concluyeSinResolver && rol !== Rol.ADMINISTRADOR) {
+        throw new ForbiddenException(
+          'Esta novedad aún no tiene impacto financiero resuelto; solo el Administrador puede cerrarla o anularla.',
+        );
+      }
+      novedad.estado = dto.estado;
+      return manager.save(novedad);
+    });
   }
 
   /**
