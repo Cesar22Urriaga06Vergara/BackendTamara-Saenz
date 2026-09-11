@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { promises as fs } from 'fs';
@@ -9,58 +10,53 @@ import {
   rutaFisicaDesdeUrlPublica,
 } from '../../common/utils/rutas-archivos.util';
 
-/** Valores con los que arranca la fila única de Empresa cuando la base de datos está en blanco. */
-function valoresPorDefecto(): Partial<Empresa> {
-  return {
-    nombre: 'Mi Empresa',
-    nit: 'PENDIENTE-POR-CONFIGURAR',
-    slogan: 'Resolvemos tu situacion',
-    horizonteMesesCanon: 3,
-  };
-}
-
 @Injectable()
 export class EmpresaService {
-  constructor(@InjectRepository(Empresa) private readonly repo: Repository<Empresa>) {}
+  constructor(
+    @InjectRepository(Empresa) private readonly repo: Repository<Empresa>,
+    private readonly configService: ConfigService,
+  ) {}
 
-  /**
-   * Retorna la ficha única de la empresa. Producción arranca con la base de datos en
-   * blanco (ya no depende de `npm run seed`, ver registro inicial de Administrador en
-   * `auth`): en vez de bloquear a cualquier consumidor con un 404 hasta que alguien
-   * siembre la fila por consola, se crea aquí con valores por defecto razonables — el
-   * Administrador los ajusta después desde `/configuracion`.
-   */
+  private empresaPredeterminada(): Empresa {
+    return {
+      id: 'inicial',
+      nombre: this.configService.get<string>('EMPRESA_NOMBRE') || 'Inversiones Tamara & Saenz S. En C.',
+      nit: this.configService.get<string>('EMPRESA_NIT') || 'PENDIENTE-POR-CONFIGURAR',
+      slogan: this.configService.get<string>('EMPRESA_SLOGAN') || 'Resolvemos tu situacion',
+      direccion: null,
+      telefono: null,
+      logoUrl: null,
+      horizonteMesesCanon: Number(this.configService.get<number>('HORIZONTE_MESES_CANON') ?? 3),
+      saldoInicialCaja: 0,
+      actualizadoEn: new Date(),
+    } as Empresa;
+  }
+
   async obtener(): Promise<Empresa> {
     const empresa = await this.repo.find({ take: 1 });
-    if (empresa[0]) return empresa[0];
-    return this.repo.save(this.repo.create(valoresPorDefecto()));
+    if (!empresa[0]) {
+      return this.empresaPredeterminada();
+    }
+    return empresa[0];
   }
 
-  /**
-   * Ficha pública de marca (sin parámetros financieros): consumida por el login y el
-   * layout autenticado para mostrar el logo/nombre reales de la empresa, incluso antes
-   * de iniciar sesión o para el rol Recepcionista (a quien `GET /empresa` completo le
-   * está vedado desde el hallazgo RBAC-03 de la auditoría).
-   */
   async obtenerBranding(): Promise<Pick<Empresa, 'nombre' | 'slogan' | 'logoUrl'>> {
-    const empresa = await this.obtener();
-    return { nombre: empresa.nombre, slogan: empresa.slogan, logoUrl: empresa.logoUrl };
+    const [empresa] = await this.repo.find({ order: { actualizadoEn: 'DESC' }, take: 1 });
+    if (empresa) {
+      return { nombre: empresa.nombre, slogan: empresa.slogan, logoUrl: empresa.logoUrl };
+    }
+
+    const predeterminada = this.empresaPredeterminada();
+    return { nombre: predeterminada.nombre, slogan: predeterminada.slogan, logoUrl: predeterminada.logoUrl };
   }
 
-  /**
-   * Actualiza los parámetros globales de negocio. Hasta el 2026-09-01 esta operación también
-   * versionaba cualquier cambio de tasa de mora en `historial_tasa_mora` (hallazgo MORA-02);
-   * ese mecanismo se retiró junto con el resto del costo de mora / interés por retraso — ya
-   * no existe ningún parámetro de negocio que necesite historial por fecha.
-   */
   async actualizarParametros(dto: UpdateEmpresaDto): Promise<Empresa> {
     const empresa = await this.repo.find({ take: 1 });
-    const actual = empresa[0] ?? (await this.repo.save(this.repo.create(valoresPorDefecto())));
+    const actual = empresa[0] ?? this.repo.create({ ...this.empresaPredeterminada(), ...dto });
     Object.assign(actual, dto);
     return this.repo.save(actual);
   }
 
-  /** Guarda la ruta pública del logo ya escrito en disco por Multer y limpia el archivo anterior. */
   async actualizarLogo(archivo: Express.Multer.File): Promise<Empresa> {
     const empresa = await this.obtener();
     const logoAnterior = empresa.logoUrl;
