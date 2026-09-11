@@ -84,7 +84,13 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3011'),
+    origin: config.get<string>('CORS_ORIGIN')
+      ? config
+          .get<string>('CORS_ORIGIN')!
+          .split(',')
+          .map((origin) => origin.trim())
+      : '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
 
