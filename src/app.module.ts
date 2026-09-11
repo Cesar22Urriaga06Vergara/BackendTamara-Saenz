@@ -96,8 +96,10 @@ function nivelDeLog(): string {
         password: cfg.get('DB_PASSWORD'),
         database: cfg.get('DB_DATABASE'),
         autoLoadEntities: true,
-        synchronize: cfg.get('DB_SYNCHRONIZE') === 'true', // false en producción: usar migraciones
+        synchronize: cfg.get('DB_SYNCHRONIZE') === 'true',
         logging: cfg.get('DB_LOGGING') === 'true',
+        ssl:
+          process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
         // Tamaño del pool de conexiones mysql2. Dimensiónalo según el plan de Railway
         // (máx. de conexiones del plugin MySQL). Por defecto 10 (el default de mysql2).
         extra: { connectionLimit: Number(cfg.get('DB_POOL_SIZE')) || 10 },
