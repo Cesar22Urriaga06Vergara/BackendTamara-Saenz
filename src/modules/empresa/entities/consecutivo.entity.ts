@@ -9,14 +9,14 @@ import { Column, Entity, PrimaryGeneratedColumn, VersionColumn } from 'typeorm';
 @Entity('consecutivo')
 export class Consecutivo {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   /** Ej: 'RECIBO_CAJA', 'EGRESO', 'NOVEDAD' */
   @Column({ length: 40, unique: true })
-  tipo: string;
+  tipo!: string;
 
   @Column({ length: 10, default: '' })
-  prefijo: string;
+  prefijo!: string;
 
   @Column({
     type: 'bigint',
@@ -26,8 +26,8 @@ export class Consecutivo {
       to: (value: number | string | null | undefined) => Number(value ?? 0),
     },
   })
-  ultimoNumero: number;
+  ultimoNumero!: number;
 
   @VersionColumn()
-  version: number;
+  version!: number;
 }
