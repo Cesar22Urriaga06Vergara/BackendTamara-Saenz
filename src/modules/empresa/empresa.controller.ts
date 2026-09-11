@@ -7,6 +7,8 @@ import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { EmpresaService } from './empresa.service';
 import { UpdateEmpresaDto } from './dto/update-empresa.dto';
+import { ConsecutivoConfigDto } from './dto/consecutivo-config.dto';
+import { ConsecutivoService } from './consecutivo.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
@@ -23,7 +25,10 @@ const MIME_PERMITIDOS = ['image/png', 'image/jpeg', 'image/jpg'];
 @ApiBearerAuth()
 @Controller('empresa')
 export class EmpresaController {
-  constructor(private readonly service: EmpresaService) {}
+  constructor(
+    private readonly service: EmpresaService,
+    private readonly consecutivoService: ConsecutivoService,
+  ) {}
 
   /**
    * Hallazgo RBAC-03 de la auditoría: expone la configuración de negocio (horizonte de canon,
@@ -53,6 +58,19 @@ export class EmpresaController {
   @AuditAction({ modulo: 'EMPRESA', accion: 'ACTUALIZAR_PARAMETROS' })
   actualizar(@Body() dto: UpdateEmpresaDto) {
     return this.service.actualizarParametros(dto);
+  }
+
+  @Get('consecutivos')
+  @Roles(Rol.ADMINISTRADOR)
+  listarConsecutivos() {
+    return this.consecutivoService.listar();
+  }
+
+  @Post('consecutivos')
+  @Roles(Rol.ADMINISTRADOR)
+  @AuditAction({ modulo: 'EMPRESA', accion: 'CONFIGURAR_CONSECUTIVO' })
+  guardarConsecutivo(@Body() dto: ConsecutivoConfigDto) {
+    return this.consecutivoService.guardar(dto);
   }
 
   @Post('logo')

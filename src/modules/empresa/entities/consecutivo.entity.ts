@@ -18,7 +18,14 @@ export class Consecutivo {
   @Column({ length: 10, default: '' })
   prefijo: string;
 
-  @Column({ type: 'bigint', default: 0 })
+  @Column({
+    type: 'bigint',
+    default: 0,
+    transformer: {
+      from: (value: string | null | undefined) => Number(value ?? 0),
+      to: (value: number | string | null | undefined) => Number(value ?? 0),
+    },
+  })
   ultimoNumero: number;
 
   @VersionColumn()

@@ -2,6 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { Consecutivo } from './entities/consecutivo.entity';
 
+export interface CrearConsecutivoDto {
+  tipo: string;
+  prefijo?: string;
+  ultimoNumero?: number;
+}
+
 /**
  * Servicio de consecutivos atómicos.
  * Usa una transacción + SELECT ... FOR UPDATE (bloqueo pesimista) sobre la fila
@@ -11,6 +17,33 @@ import { Consecutivo } from './entities/consecutivo.entity';
 @Injectable()
 export class ConsecutivoService {
   constructor(private readonly dataSource: DataSource) {}
+
+  async listar(): Promise<Consecutivo[]> {
+    return this.dataSource.getRepository(Consecutivo).find({ order: { tipo: 'ASC' } });
+  }
+
+  async guardar(dto: CrearConsecutivoDto): Promise<Consecutivo> {
+    const repo = this.dataSource.getRepository(Consecutivo);
+    const existente = await repo.findOne({ where: { tipo: dto.tipo } });
+
+    const ultimoNumero = Number(dto.ultimoNumero ?? existente?.ultimoNumero ?? 0);
+
+    if (existente) {
+      Object.assign(existente, {
+        prefijo: dto.prefijo ?? existente.prefijo,
+        ultimoNumero,
+      });
+      return repo.save(existente);
+    }
+
+    return repo.save(
+      repo.create({
+        tipo: dto.tipo,
+        prefijo: dto.prefijo ?? '',
+        ultimoNumero,
+      }),
+    );
+  }
 
   /**
    * Obtiene el siguiente número formateado (ej: "REC-000123") para el tipo dado.
@@ -39,7 +72,6 @@ export class ConsecutivoService {
       if (!consecutivo) {
         consecutivo = repo.create({ tipo, prefijo: prefijoPorDefecto, ultimoNumero: 0 });
         await repo.save(consecutivo);
-        // Se vuelve a bloquear tras insertar para asegurar consistencia si hubo carrera de creación.
         consecutivo = await repo
           .createQueryBuilder('c')
           .setLock('pessimistic_write')
