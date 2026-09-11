@@ -39,8 +39,9 @@ export function validarConfiguracionProduccion(configuracion: Configuracion): vo
     throw new Error('Configuración de producción insegura: DB_PORT debe ser un puerto válido.');
   }
 
-  if (configuracion.DB_SYNCHRONIZE?.trim().toLowerCase() !== 'false') {
-    throw new Error('Configuración de producción insegura: DB_SYNCHRONIZE debe ser false.');
+  const dbSynchronize = configuracion.DB_SYNCHRONIZE?.trim().toLowerCase();
+  if (dbSynchronize !== 'true' && dbSynchronize !== 'false') {
+    throw new Error('Configuración de producción insegura: DB_SYNCHRONIZE debe ser "true" o "false".');
   }
 
   const uploadsDir = exigirVariable(configuracion, 'UPLOADS_DIR');

@@ -23,9 +23,13 @@ describe('validarConfiguracionProduccion', () => {
     expect(() => validarConfiguracionProduccion({ NODE_ENV: 'test' })).not.toThrow();
   });
 
+  it('acepta synchronización automática cuando se habilita explícitamente', () => {
+    expect(() => validarConfiguracionProduccion({ ...configuracionValida, DB_SYNCHRONIZE: 'true' })).not.toThrow();
+  });
+
   it.each([
     ['CORS_ORIGIN', { CORS_ORIGIN: 'http://localhost:3011' }],
-    ['DB_SYNCHRONIZE', { DB_SYNCHRONIZE: 'true' }],
+    ['DB_SYNCHRONIZE', { DB_SYNCHRONIZE: 'yes' }],
     ['UPLOADS_DIR', { UPLOADS_DIR: '' }],
     ['SWAGGER_ENABLED', { SWAGGER_ENABLED: 'true' }],
   ])('rechaza una configuración insegura en %s', (_campo, cambio) => {
