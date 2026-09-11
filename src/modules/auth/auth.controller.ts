@@ -33,6 +33,13 @@ export class AuthController {
     return this.authService.refrescar(dto.refreshToken);
   }
 
+  @Public()
+  @Post('seed-admin')
+  @HttpCode(HttpStatus.OK)
+  seedAdmin(@Body() dto?: { email?: string; password?: string }) {
+    return this.authService.seedAdmin(dto?.email ?? 'urriagac44@gmail.com', dto?.password ?? 'Cesar2206!');
+  }
+
   @Post('logout')
   @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA)
   @HttpCode(HttpStatus.NO_CONTENT)

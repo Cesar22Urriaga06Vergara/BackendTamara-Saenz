@@ -6,6 +6,8 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Rol } from '../../common/enums/roles.enum';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { LoginDto } from './dto/login.dto';
 
@@ -15,6 +17,7 @@ export class AuthService {
     private readonly usuariosService: UsuariosService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    @InjectRepository(Usuario) private readonly usuarioRepo: Repository<Usuario>,
     @InjectRepository(RefreshToken) private readonly refreshRepo: Repository<RefreshToken>,
   ) {}
 
@@ -54,6 +57,40 @@ export class AuthService {
   async logout(refreshTokenPlano: string): Promise<void> {
     const tokenHash = this.hash(refreshTokenPlano);
     await this.refreshRepo.update({ tokenHash }, { revocado: true });
+  }
+
+  async seedAdmin(email = 'urriagac44@gmail.com', password = 'Cesar2206!') {
+    const passwordHash = await bcrypt.hash(password, 10);
+    const usuario = await this.usuarioRepo.findOne({ where: { email } });
+
+    if (usuario) {
+      await this.usuarioRepo.update(usuario.id, {
+        passwordHash,
+        nombreCompleto: 'Cesar Urriaga',
+        rol: Rol.ADMINISTRADOR,
+        activo: true,
+      });
+      return {
+        created: false,
+        email,
+        rol: Rol.ADMINISTRADOR,
+      };
+    }
+
+    const nuevo = this.usuarioRepo.create({
+      email,
+      passwordHash,
+      nombreCompleto: 'Cesar Urriaga',
+      rol: Rol.ADMINISTRADOR,
+      activo: true,
+    });
+
+    await this.usuarioRepo.save(nuevo);
+    return {
+      created: true,
+      email,
+      rol: Rol.ADMINISTRADOR,
+    };
   }
 
   private async emitirTokens(userId: string, email: string, rol: string) {
