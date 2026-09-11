@@ -66,6 +66,28 @@ export class NovedadesService {
   }
 
   async listar(filtro: FilterNovedadDto) {
+    const qb = this.construirConsulta(filtro);
+
+    qb.orderBy('n.creadoEn', 'DESC');
+
+    return paginar(qb, filtro.page, filtro.limit);
+  }
+
+  /** Consulta completa para reportes; no aplica paginación de pantalla. */
+  async listarTodosParaExport(filtro: FilterNovedadDto = {}): Promise<Novedad[]> {
+    return this.construirConsulta(filtro).orderBy('n.creadoEn', 'DESC').getMany();
+  }
+
+  async listarPendientesParaExport(): Promise<Novedad[]> {
+    return this.construirConsulta({ impactoFinanciero: ImpactoFinanciero.PENDIENTE })
+      .andWhere('n.estado IN (:...estadosPendientes)', {
+        estadosPendientes: [EstadoNovedad.ABIERTA, EstadoNovedad.EN_SEGUIMIENTO],
+      })
+      .orderBy('n.creadoEn', 'ASC')
+      .getMany();
+  }
+
+  private construirConsulta(filtro: FilterNovedadDto) {
     const qb = this.repo
       .createQueryBuilder('n')
       .leftJoinAndSelect('n.inmueble', 'inmueble')
@@ -79,10 +101,9 @@ export class NovedadesService {
     if (filtro.impactoFinanciero) qb.andWhere('n.impactoFinanciero = :impacto', { impacto: filtro.impactoFinanciero });
     if (filtro.gastoPagado !== undefined)
       qb.andWhere('n.gastoPagado = :gastoPagado', { gastoPagado: filtro.gastoPagado });
+    if (filtro.inmuebleId) qb.andWhere('inmueble.id = :inmuebleId', { inmuebleId: filtro.inmuebleId });
 
-    qb.orderBy('n.creadoEn', 'DESC');
-
-    return paginar(qb, filtro.page, filtro.limit);
+    return qb;
   }
 
   async obtener(id: string): Promise<Novedad> {

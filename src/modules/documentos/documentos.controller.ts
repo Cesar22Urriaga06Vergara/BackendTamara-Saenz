@@ -14,12 +14,14 @@ import { NovedadesService } from '../novedades/novedades.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
+import { FiltroReporteNovedadDto } from './dto/filtro-reporte-novedad.dto';
+import { ImpactoFinanciero } from '../novedades/entities/novedad.entity';
 
 /** Emisión de documentos oficiales (PDF/Excel) — EXCLUSIVO Administrador, salvo el recibo de reporte de novedad (operativo). */
 @ApiTags('Documentos (PDF / Excel)')
 @ApiBearerAuth()
 @Controller('documentos')
-@Roles(Rol.ADMINISTRADOR)
+@Roles(Rol.ADMINISTRADOR, Rol.CONTADOR)
 export class DocumentosController {
   constructor(
     private readonly pdfRecibo: PdfReciboService,
@@ -102,6 +104,60 @@ export class DocumentosController {
     const buffer = await this.excelReportes.reporteCartera(obligaciones);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="reporte-cartera.xlsx"');
+    res.send(buffer);
+  }
+
+  /** Reporte consolidado de novedades con estado, impacto y monto aprobado. */
+  @Get('reportes/novedades.xlsx')
+  @AuditAction({ modulo: 'DOCUMENTOS', accion: 'EXPORTAR_REPORTE_NOVEDADES' })
+  async reporteNovedades(@Res() res: Response) {
+    const novedades = await this.novedadesService.listarTodosParaExport({});
+    const buffer = await this.excelReportes.reporteNovedades(novedades);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-novedades.xlsx"');
+    res.send(buffer);
+  }
+
+  @Get('reportes/novedades-por-inmueble.xlsx')
+  @AuditAction({ modulo: 'DOCUMENTOS', accion: 'EXPORTAR_REPORTE_NOVEDADES_INMUEBLE' })
+  async reporteNovedadesPorInmueble(@Query() filtro: FiltroReporteNovedadDto, @Res() res: Response) {
+    const novedades = await this.novedadesService.listarTodosParaExport(filtro);
+    const buffer = await this.excelReportes.reporteNovedadesPorInmueble(novedades);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-novedades-por-inmueble.xlsx"');
+    res.send(buffer);
+  }
+
+  @Get('reportes/novedades-financiero.xlsx')
+  @AuditAction({ modulo: 'DOCUMENTOS', accion: 'EXPORTAR_REPORTE_NOVEDADES_FINANCIERO' })
+  async reporteNovedadesFinanciero(@Query() filtro: FiltroReporteNovedadDto, @Res() res: Response) {
+    const novedades = await this.novedadesService.listarTodosParaExport(filtro);
+    const buffer = await this.excelReportes.reporteNovedadesFinanciero(novedades);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-novedades-financiero.xlsx"');
+    res.send(buffer);
+  }
+
+  @Get('reportes/gastos-inmobiliaria.xlsx')
+  @AuditAction({ modulo: 'DOCUMENTOS', accion: 'EXPORTAR_REPORTE_GASTOS_INMOBILIARIA' })
+  async reporteGastosInmobiliaria(@Query() filtro: FiltroReporteNovedadDto, @Res() res: Response) {
+    const novedades = await this.novedadesService.listarTodosParaExport({
+      ...filtro,
+      impactoFinanciero: ImpactoFinanciero.GASTO_INMOBILIARIA,
+    });
+    const buffer = await this.excelReportes.reporteGastosInmobiliaria(novedades);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-gastos-inmobiliaria.xlsx"');
+    res.send(buffer);
+  }
+
+  @Get('reportes/novedades-pendientes.xlsx')
+  @AuditAction({ modulo: 'DOCUMENTOS', accion: 'EXPORTAR_REPORTE_NOVEDADES_PENDIENTES' })
+  async reporteNovedadesPendientes(@Res() res: Response) {
+    const novedades = await this.novedadesService.listarPendientesParaExport();
+    const buffer = await this.excelReportes.reporteNovedadesPendientes(novedades);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-novedades-pendientes.xlsx"');
     res.send(buffer);
   }
 }
