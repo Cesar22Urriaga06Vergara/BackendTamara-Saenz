@@ -11,12 +11,13 @@ import { PaginacionDto } from '../../common/dto/paginacion.dto';
 @ApiTags('Financiero / Obligaciones')
 @ApiBearerAuth()
 @Controller('obligaciones')
-@Roles(Rol.ADMINISTRADOR)
+@Roles(Rol.ADMINISTRADOR, Rol.CONTADOR)
 export class ObligacionesController {
   constructor(private readonly service: ObligacionesService) {}
 
   /** Disparo manual de la generación mensual (además del CRON automático). */
   @Post('generar-canones')
+  @Roles(Rol.ADMINISTRADOR)
   @AuditAction({ modulo: 'OBLIGACIONES', accion: 'GENERAR_CANONES_MENSUALES' })
   generarCanones() {
     return this.service.generarCanonesMensuales();
@@ -35,6 +36,7 @@ export class ObligacionesController {
 
   /** Anula una obligación PENDIENTE generada por error (sin abonos aplicados). */
   @Patch(':id/anular')
+  @Roles(Rol.ADMINISTRADOR)
   @AuditAction({ modulo: 'OBLIGACIONES', accion: 'ANULAR' })
   anular(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AnularObligacionDto) {
     return this.service.anular(id, dto.motivo);

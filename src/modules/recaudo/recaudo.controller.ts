@@ -19,7 +19,7 @@ import { PaginacionDto } from '../../common/dto/paginacion.dto';
 @ApiTags('Financiero / Recaudo')
 @ApiBearerAuth()
 @Controller('recaudo')
-@Roles(Rol.ADMINISTRADOR)
+@Roles(Rol.ADMINISTRADOR, Rol.CONTADOR)
 export class RecaudoController {
   constructor(private readonly service: RecaudoService) {}
 
@@ -30,6 +30,7 @@ export class RecaudoController {
   }
 
   @Post('pagos')
+  @Roles(Rol.ADMINISTRADOR)
   @AuditAction({ modulo: 'RECAUDO', accion: 'REGISTRAR_PAGO' })
   registrarPago(@Body() dto: RegistrarPagoDto, @CurrentUser() user: any) {
     return this.service.registrarPago(dto, user.email);
@@ -40,6 +41,7 @@ export class RecaudoController {
    * abono ni genera recibo. Sin `@AuditAction` deliberadamente — no muta nada financiero.
    */
   @Post('pagos/simular')
+  @Roles(Rol.ADMINISTRADOR)
   simularPago(@Body() dto: RegistrarPagoDto) {
     return this.service.simularPago(dto);
   }
@@ -65,6 +67,7 @@ export class RecaudoController {
   }
 
   @Patch('recibos/:id/anular')
+  @Roles(Rol.ADMINISTRADOR)
   @AuditAction({ modulo: 'RECAUDO', accion: 'ANULAR_RECIBO' })
   anular(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AnularReciboDto, @CurrentUser() user: any) {
     return this.service.anular(id, dto, user.email);
@@ -83,6 +86,7 @@ export class RecaudoController {
   }
 
   @Post('contrato/:contratoId/liquidar-deposito')
+  @Roles(Rol.ADMINISTRADOR)
   @AuditAction({ modulo: 'RECAUDO', accion: 'LIQUIDAR_DEPOSITO' })
   liquidarDeposito(
     @Param('contratoId', ParseUUIDPipe) contratoId: string,

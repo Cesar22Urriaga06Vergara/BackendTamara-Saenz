@@ -163,20 +163,16 @@ El backend se despliega en **Railway** como servicio Docker (`Dockerfile` multi-
 
 ### Migraciones
 
-`railway.json` usa `startCommand: "npm run deploy:migrate && node dist/main"` — las migraciones se
-corren en cada arranque (idempotente: TypeORM salta las ya aplicadas). `deploy:migrate` usa el CLI
-de `typeorm` sobre el `dist/database/data-source.js` compilado (sin ts-node, funciona con
-`--omit=dev`).
+El servicio de Render debe usar `npm run deploy:migrate && npm run start:prod` como `Start Command`.
+Las migraciones se ejecutan en cada arranque; TypeORM salta las ya aplicadas. `deploy:migrate` usa
+el CLI sobre `dist/database/data-source.js` compilado (sin ts-node, funciona con `--omit=dev`).
 
-### Volumen de uploads (logo de empresa)
-
-El logo subido desde `/configuracion` se guarda en disco. El FS del contenedor de Railway es
-**efímero** — sin un Volume, el logo desaparece en cada deploy (de la UI y de todos los PDF).
-
-1. Railway → el servicio → **Volumes** → New Volume, mountPath p. ej. `/data`.
-2. Añadir la variable `UPLOADS_DIR=/data/uploads`.
-
-En local, `UPLOADS_DIR` vacío → se usa `<repo>/uploads` (comportamiento de siempre).
+Si la base de Aiven ya tenía tablas creadas antes de registrar el historial de TypeORM, no se debe
+ejecutar la migración inicial sobre ella. Después de crear un backup y verificar que el esquema
+existente corresponde a las migraciones 1--26, ejecutar una sola vez el contenido de
+`scripts/baseline-aiven.sql` en Aiven. Ese archivo registra solo el historial anterior; las
+migraciones nuevas quedan pendientes para `deploy:migrate`. No ejecutar el baseline contra otra
+base ni marcar las migraciones nuevas como aplicadas.
 
 ### Primer despliegue
 
@@ -281,16 +277,8 @@ Los 2 ítems de la Fase 4 (AUD-030, AUD-031) quedaron resueltos:
 
 ## Fase 5 (2026-08-18) — Seguridad, cerrada
 
-- AUD-032: se retiró `logoUrl` de `UpdateEmpresaDto` — ya no se puede editar como texto libre
-  vía `PATCH /empresa`, bypaseando las validaciones reales de `POST /empresa/logo` (MIME,
-  tamaño, nombre aleatorio). Con `forbidNonWhitelisted: true` ya activo globalmente, el campo
-  ahora es rechazado automáticamente.
-- AUD-033: verificado y descartado sin cambios de código. `/uploads` se sirve sin autenticación
-  (es middleware estático de Express, fuera del pipeline de guards), pero solo contiene el logo
-  de la empresa con nombre `randomUUID()` (no enumerable) — no hay ningún otro `FileInterceptor`
-  en el backend. Moverlo detrás de un guard rompería `configuracion/index.vue` (usa `<img src>`,
-  que no puede enviar `Authorization`) sin ganar seguridad real, dado que no hay contenido
-  sensible en esa carpeta.
+- El logo corporativo es un asset fijo versionado y empaquetado en backend y frontend. No existe
+  carga de archivos, endpoint de logo ni superficie pública `/uploads`.
 
 ## Retiro del costo de mora + auditoría contable (2026-09-01)
 

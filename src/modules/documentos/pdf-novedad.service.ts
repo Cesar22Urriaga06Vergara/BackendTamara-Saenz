@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import * as PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
+import { join } from 'path';
 import { EstadoNovedad, Novedad } from '../novedades/entities/novedad.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
 import { fechaLocalDesdeString } from '../../common/utils/fecha.util';
-import { rutaFisicaDesdeUrlPublica } from '../../common/utils/rutas-archivos.util';
 
 const COLOR_TEXTO = '#1A1A1A';
 const COLOR_GRIS = '#4A4D52';
@@ -12,6 +12,7 @@ const COLOR_ORO = '#CFA052';
 const COLOR_ORO_CLARO = '#FBF3E4';
 const COLOR_BORDE = '#D9D9D9';
 const COLOR_DIVISOR = '#E5E7EB';
+const RUTA_LOGO_FIJO = join(__dirname, '../../assets/Logo.png');
 
 /** Color de acento por estado: se usa en la insignia de la tarjeta y, para ANULADA, en el banner de aviso. */
 const COLOR_ESTADO: Record<string, string> = {
@@ -51,7 +52,7 @@ const ETIQUETA_IMPACTO: Record<string, string> = {
 export class PdfNovedadService {
   generar(
     novedad: Novedad,
-    empresa: Pick<Empresa, 'nombre' | 'nit' | 'slogan' | 'direccion' | 'telefono' | 'logoUrl'>,
+    empresa: Pick<Empresa, 'nombre' | 'nit' | 'slogan' | 'direccion' | 'telefono'>,
   ): Promise<Buffer> {
     const tamano: [number, number] = [612, 792];
     const margenX = 40;
@@ -68,16 +69,13 @@ export class PdfNovedadService {
 
       // ---- Logo + encabezado corporativo (mismo patrón de PdfReciboService) ----
       let yTrasLogo = doc.y;
-      if (empresa.logoUrl) {
-        const rutaFisicaLogo = rutaFisicaDesdeUrlPublica(empresa.logoUrl);
-        if (existsSync(rutaFisicaLogo)) {
-          // Mismo tamaño base que PdfReciboService (112x80, +25% respecto al anterior 90x64) —
-          // este documento no tiene variante Media Carta, no hace falta escalar.
-          const anchoLogo = 112;
-          const altoLogo = 80;
-          doc.image(rutaFisicaLogo, tamano[0] - margenX - anchoLogo, doc.y, { fit: [anchoLogo, altoLogo] });
-          yTrasLogo = doc.y + altoLogo + 10;
-        }
+      if (existsSync(RUTA_LOGO_FIJO)) {
+        // Mismo tamaño base que PdfReciboService (112x80, +25% respecto al anterior 90x64) —
+        // este documento no tiene variante Media Carta, no hace falta escalar.
+        const anchoLogo = 112;
+        const altoLogo = 80;
+        doc.image(RUTA_LOGO_FIJO, tamano[0] - margenX - anchoLogo, doc.y, { fit: [anchoLogo, altoLogo] });
+        yTrasLogo = doc.y + altoLogo + 10;
       }
 
       doc.fillColor(COLOR_TEXTO).fontSize(16).font('Helvetica-Bold').text(empresa.nombre, { align: 'left' });

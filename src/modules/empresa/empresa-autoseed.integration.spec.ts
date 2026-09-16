@@ -26,7 +26,6 @@ describe('EmpresaService (integración) — configuración inicial', () => {
     const empresa = await service.obtener();
     expect(empresa.nombre).toBeTruthy();
     expect(empresa.slogan).toBeTruthy();
-    expect(empresa.logoUrl).toBeNull();
     const count = await testApp.dataSource.getRepository('empresa').count();
     expect(count).toBe(0);
   });
@@ -51,9 +50,8 @@ describe('EmpresaService (integración) — configuración inicial', () => {
 
   it('obtenerBranding devuelve la marca por defecto del sistema sin exigir una empresa guardada', async () => {
     const branding = await service.obtenerBranding();
-    expect(Object.keys(branding).sort()).toEqual(['logoUrl', 'nombre', 'slogan']);
+    expect(Object.keys(branding).sort()).toEqual(['nombre', 'slogan']);
     expect(branding.nombre).toBeTruthy();
     expect(branding.slogan).toBeTruthy();
-    expect(branding.logoUrl).toBeNull();
   });
 });

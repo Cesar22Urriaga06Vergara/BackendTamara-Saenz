@@ -1,3 +1,4 @@
+import * as request from 'supertest';
 import { AuthService } from './auth.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { RefreshToken } from './entities/refresh-token.entity';
@@ -133,6 +134,40 @@ describe('AuthService (integración) — login / refresh / logout', () => {
       expect(registros).toHaveLength(1);
       expect(registros[0].tokenHash).not.toBe(sesion.refreshToken);
       expect(registros[0].tokenHash).toHaveLength(64); // hex de SHA-256
+    });
+  });
+
+  describe('RBAC — rol CONTADOR', () => {
+    it('puede leer métricas financieras, pero no ejecutar mutaciones del motor de recaudo', async () => {
+      const usuario = await crearUsuarioActivo({
+        email: 'contador@tamarasaenz.com',
+        rol: Rol.CONTADOR,
+        password: 'Password#123',
+      });
+      const sesion = await authService.login({ email: usuario.email, password: 'Password#123' });
+
+      const lectura = await request(testApp.app.getHttpServer())
+        .get('/dashboard/financiero')
+        .set('Authorization', `Bearer ${sesion.accessToken}`);
+
+      expect(lectura.status).toBe(200);
+      expect(lectura.body).toHaveProperty('carteraTotal');
+      expect(lectura.body).toHaveProperty('recaudoMesActual');
+
+      const escritura = await request(testApp.app.getHttpServer())
+        .post('/recaudo/pagos')
+        .set('Authorization', `Bearer ${sesion.accessToken}`)
+        .send({});
+
+      expect(escritura.status).toBe(403);
+      expect(escritura.body.message).toMatch(/rol|restringido|acceso/i);
+
+      const mutacionServicio = await request(testApp.app.getHttpServer())
+        .patch('/servicios-publicos/00000000-0000-4000-8000-000000000000/aprobar-responsable')
+        .set('Authorization', `Bearer ${sesion.accessToken}`)
+        .send({ responsablePago: 'ARRENDATARIO' });
+
+      expect(mutacionServicio.status).toBe(403);
     });
   });
 });

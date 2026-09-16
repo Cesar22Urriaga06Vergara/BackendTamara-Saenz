@@ -1,5 +1,3 @@
-import { isAbsolute } from 'path';
-
 type Configuracion = Record<string, string | undefined>;
 
 const VARIABLES_BD_OBLIGATORIAS = ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_DATABASE'];
@@ -42,11 +40,6 @@ export function validarConfiguracionProduccion(configuracion: Configuracion): vo
   const dbSynchronize = configuracion.DB_SYNCHRONIZE?.trim().toLowerCase();
   if (dbSynchronize !== 'true' && dbSynchronize !== 'false') {
     throw new Error('Configuración de producción insegura: DB_SYNCHRONIZE debe ser "true" o "false".');
-  }
-
-  const uploadsDir = exigirVariable(configuracion, 'UPLOADS_DIR');
-  if (!isAbsolute(uploadsDir)) {
-    throw new Error('Configuración de producción insegura: UPLOADS_DIR debe ser una ruta absoluta.');
   }
 
   if (configuracion.SWAGGER_ENABLED?.trim().toLowerCase() === 'true') {

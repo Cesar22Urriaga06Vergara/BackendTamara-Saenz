@@ -158,14 +158,16 @@ describe('ExcelReportesService', () => {
 
     const porInmueble = await service.reporteNovedadesPorInmueble([novedad]);
     const financiero = await service.reporteNovedadesFinanciero([novedad]);
-    const gastos = await service.reporteGastosInmobiliaria([{
-      ...novedad,
-      impactoFinanciero: 'GASTO_INMOBILIARIA',
-      montoAprobado: 120000,
-      gastoPagado: true,
-      medioPagoGasto: 'EFECTIVO',
-      referenciaPagoGasto: 'CAJA-1',
-    }]);
+    const gastos = await service.reporteGastosInmobiliaria([
+      {
+        ...novedad,
+        impactoFinanciero: 'GASTO_INMOBILIARIA',
+        montoAprobado: 120000,
+        gastoPagado: true,
+        medioPagoGasto: 'EFECTIVO',
+        referenciaPagoGasto: 'CAJA-1',
+      },
+    ]);
     const pendientes = await service.reporteNovedadesPendientes([novedad]);
 
     expect((await leerHoja(porInmueble)).getRow(2).getCell(2).value).toBe('Carrera 10');

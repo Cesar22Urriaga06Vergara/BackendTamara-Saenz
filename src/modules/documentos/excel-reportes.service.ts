@@ -168,7 +168,12 @@ export class ExcelReportesService {
         barrio: n.inmueble?.barrio,
         cliente: n.contrato?.cliente?.nombreCompleto ?? 'Sin contrato',
         estado: n.estado,
-        impactoFinanciero: n.impactoFinanciero === 'CARGO_ARRENDATARIO' ? 'Cargo arrendatario' : n.impactoFinanciero === 'GASTO_INMOBILIARIA' ? 'Gasto inmobiliaria' : n.impactoFinanciero ?? 'Pendiente',
+        impactoFinanciero:
+          n.impactoFinanciero === 'CARGO_ARRENDATARIO'
+            ? 'Cargo arrendatario'
+            : n.impactoFinanciero === 'GASTO_INMOBILIARIA'
+              ? 'Gasto inmobiliaria'
+              : (n.impactoFinanciero ?? 'Pendiente'),
         montoAprobado: n.montoAprobado,
         gastoPagado: n.gastoPagado ? 'Sí' : 'No',
         responsableSugerido: n.responsableSugerido,

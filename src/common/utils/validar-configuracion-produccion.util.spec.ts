@@ -9,7 +9,6 @@ const configuracionValida = {
   DB_PASSWORD: 'secreto-real',
   DB_DATABASE: 'tamara_saenz',
   DB_SYNCHRONIZE: 'false',
-  UPLOADS_DIR: '/data/uploads',
   SWAGGER_ENABLED: 'false',
 };
 
@@ -30,7 +29,6 @@ describe('validarConfiguracionProduccion', () => {
   it.each([
     ['CORS_ORIGIN', { CORS_ORIGIN: 'http://localhost:3011' }],
     ['DB_SYNCHRONIZE', { DB_SYNCHRONIZE: 'yes' }],
-    ['UPLOADS_DIR', { UPLOADS_DIR: '' }],
     ['SWAGGER_ENABLED', { SWAGGER_ENABLED: 'true' }],
   ])('rechaza una configuración insegura en %s', (_campo, cambio) => {
     expect(() => validarConfiguracionProduccion({ ...configuracionValida, ...cambio })).toThrow();

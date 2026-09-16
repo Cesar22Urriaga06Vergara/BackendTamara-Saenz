@@ -24,7 +24,7 @@ export class DashboardController {
    * por defecto (fail-closed) en vez de filtrar dinero silenciosamente.
    */
   @Get('financiero')
-  @Roles(Rol.ADMINISTRADOR)
+  @Roles(Rol.ADMINISTRADOR, Rol.CONTADOR)
   resumenFinanciero() {
     return this.service.metricasFinancieras();
   }

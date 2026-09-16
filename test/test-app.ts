@@ -29,6 +29,7 @@ export async function bootstrapTestApp(): Promise<TestApp> {
 
 /** Orden de truncado respetando FKs (se desactivan igual, por si acaso, antes de truncar). */
 const TABLAS_EN_ORDEN_DE_LIMPIEZA = [
+  'servicio_publico',
   'refresh_token',
   'usuario',
   'aplicacion_pago',

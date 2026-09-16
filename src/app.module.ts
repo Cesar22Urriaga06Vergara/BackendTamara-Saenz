@@ -20,6 +20,7 @@ import { MovimientosModule } from './modules/movimientos/movimientos.module';
 import { CajaModule } from './modules/caja/caja.module';
 import { ObligacionesModule } from './modules/obligaciones/obligaciones.module';
 import { RecaudoModule } from './modules/recaudo/recaudo.module';
+import { ServiciosPublicosModule } from './modules/servicios-publicos/servicios-publicos.module';
 import { DocumentosModule } from './modules/documentos/documentos.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
@@ -117,6 +118,7 @@ function nivelDeLog(): string {
     CajaModule,
     ObligacionesModule,
     RecaudoModule,
+    ServiciosPublicosModule,
     DocumentosModule,
     AuditoriaModule,
     DashboardModule,

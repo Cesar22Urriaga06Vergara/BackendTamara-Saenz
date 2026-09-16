@@ -12,6 +12,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ImpactoFinanciero } from './entities/novedad.entity';
 
 @ApiTags('Operación / Novedades')
 @ApiBearerAuth()
@@ -31,6 +32,13 @@ export class NovedadesController {
   @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA)
   listar(@Query() filtro: FilterNovedadDto) {
     return this.service.listar(filtro);
+  }
+
+  /** Consulta financiera de gastos para Administrador y Contador, sin exponer novedades operativas. */
+  @Get('financiero/gastos')
+  @Roles(Rol.ADMINISTRADOR, Rol.CONTADOR)
+  listarGastos(@Query() filtro: FilterNovedadDto) {
+    return this.service.listar({ ...filtro, impactoFinanciero: ImpactoFinanciero.GASTO_INMOBILIARIA });
   }
 
   @Get(':id')

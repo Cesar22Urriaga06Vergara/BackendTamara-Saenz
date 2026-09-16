@@ -10,7 +10,6 @@ import { AppModule } from './app.module';
 import { SanitizarHtmlPipe } from './common/pipes/sanitizar-html.pipe';
 import { TypeOrmExceptionFilter } from './common/filters/typeorm-exception.filter';
 import { validarSecretoJwt } from './common/utils/validar-secreto-jwt.util';
-import { directorioUploads, PREFIJO_PUBLICO_UPLOADS } from './common/utils/rutas-archivos.util';
 
 async function bootstrap() {
   // `bufferLogs: true`: retiene los logs del arranque hasta que se instala el logger de pino.
@@ -23,8 +22,8 @@ async function bootstrap() {
   validarSecretoJwt(config.get<string>('JWT_ACCESS_SECRET'));
 
   // Cabeceras de seguridad (nosniff, frameguard, HSTS, referrer-policy, etc.). El backend solo
-  // sirve `/api` (JSON) y `/uploads` (estáticos); el frontend es una app aparte en Cloudflare
-  // Pages, así que la CSP puede ser estricta. Swagger (solo con SWAGGER_ENABLED=true, apagado en
+  // sirve `/api` (JSON); el frontend es una app aparte en Cloudflare Pages, así que la CSP puede
+  // ser estricta. Swagger (solo con SWAGGER_ENABLED=true, apagado en
   // prod) necesita `'unsafe-inline'` en `style-src`; el `script-src` ya no lo lleva.
   app.use(
     helmet({
@@ -39,7 +38,7 @@ async function bootstrap() {
           'base-uri': ["'self'"],
         },
       },
-      crossOriginResourcePolicy: { policy: 'cross-origin' }, // el logo en /uploads lo consume el frontend en otro origen
+      crossOriginResourcePolicy: { policy: 'same-origin' },
     }),
   );
 
@@ -65,8 +64,6 @@ async function bootstrap() {
     app.set('trust proxy', false);
   }
 
-  app.useStaticAssets(directorioUploads(), { prefix: PREFIJO_PUBLICO_UPLOADS });
-
   app.useGlobalFilters(new TypeOrmExceptionFilter());
 
   const prefix = config.get<string>('API_PREFIX', 'api');
@@ -83,13 +80,16 @@ async function bootstrap() {
     }),
   );
 
+  const corsOrigin = config.get<string>('CORS_ORIGIN');
+  if (!corsOrigin) {
+    throw new Error('CORS_ORIGIN debe definirse para arrancar la API.');
+  }
+
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN')
-      ? config
-          .get<string>('CORS_ORIGIN')!
-          .split(',')
-          .map((origin) => origin.trim())
-      : '*',
+    origin: corsOrigin
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });

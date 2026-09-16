@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import * as PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
+import { join } from 'path';
 import { EstadoRecibo, ReciboCaja } from '../recaudo/entities/recibo-caja.entity';
 import { Empresa } from '../empresa/entities/empresa.entity';
-import { rutaFisicaDesdeUrlPublica } from '../../common/utils/rutas-archivos.util';
 
 /** Paleta compartida con `PdfNovedadService` — mismos nombres, mismos valores, un solo lugar de verdad visual. */
 const COLOR_TEXTO = '#1A1A1A';
@@ -14,6 +14,7 @@ const COLOR_BORDE = '#D9D9D9';
 const COLOR_DIVISOR = '#E5E7EB';
 const COLOR_ROJO = '#DC2626';
 const COLOR_BLANCO = '#FFFFFF';
+const RUTA_LOGO_FIJO = join(__dirname, '../../assets/Logo.png');
 
 /**
  * Genera el Recibo de Caja oficial en PDF vectorial (PDFKit), en formato
@@ -25,7 +26,7 @@ const COLOR_BLANCO = '#FFFFFF';
 export class PdfReciboService {
   generar(
     recibo: ReciboCaja,
-    empresa: Pick<Empresa, 'nombre' | 'nit' | 'slogan' | 'direccion' | 'telefono' | 'logoUrl'>,
+    empresa: Pick<Empresa, 'nombre' | 'nit' | 'slogan' | 'direccion' | 'telefono'>,
     formato: 'CARTA' | 'MEDIA_CARTA' = 'CARTA',
   ): Promise<Buffer> {
     const tamano: [number, number] = formato === 'CARTA' ? [612, 792] : [612, 396];
@@ -54,22 +55,17 @@ export class PdfReciboService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // ---- Logo (si el Administrador ya subió uno desde Configuración) ----
-      // logoUrl guarda la ruta pública ("/uploads/empresa/<archivo>"); la ruta física se resuelve
-      // contra UPLOADS_DIR (Volume de Railway) o <repo>/uploads en local (ver rutas-archivos.util).
+      // ---- Logo corporativo fijo, empaquetado en la aplicación ----
       let yTrasLogo = doc.y;
-      if (empresa.logoUrl) {
-        const rutaFisicaLogo = rutaFisicaDesdeUrlPublica(empresa.logoUrl);
-        if (existsSync(rutaFisicaLogo)) {
-          // Tamaño base +25% respecto al anterior (90x64 -> 112x80, misma relación de aspecto vía
-          // `fit`), escalado además por `espaciado.escala` en Media Carta — antes el logo NO se
-          // reducía ahí (quedaba igual de grande en una hoja de la mitad de alto), así que
-          // agrandarlo sin este ajuste lo habría hecho desproporcionado en ese formato.
-          const anchoLogo = Math.round(112 * espaciado.escala);
-          const altoLogo = Math.round(80 * espaciado.escala);
-          doc.image(rutaFisicaLogo, tamano[0] - margenX - anchoLogo, doc.y, { fit: [anchoLogo, altoLogo] });
-          yTrasLogo = doc.y + altoLogo + 10;
-        }
+      if (existsSync(RUTA_LOGO_FIJO)) {
+        // Tamaño base +25% respecto al anterior (90x64 -> 112x80, misma relación de aspecto vía
+        // `fit`), escalado además por `espaciado.escala` en Media Carta — antes el logo NO se
+        // reducía ahí (quedaba igual de grande en una hoja de la mitad de alto), así que
+        // agrandarlo sin este ajuste lo habría hecho desproporcionado en ese formato.
+        const anchoLogo = Math.round(112 * espaciado.escala);
+        const altoLogo = Math.round(80 * espaciado.escala);
+        doc.image(RUTA_LOGO_FIJO, tamano[0] - margenX - anchoLogo, doc.y, { fit: [anchoLogo, altoLogo] });
+        yTrasLogo = doc.y + altoLogo + 10;
       }
 
       // ---- Encabezado corporativo (siempre desde la ficha de Empresa en BD) ----

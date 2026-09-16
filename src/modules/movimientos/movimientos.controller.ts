@@ -13,7 +13,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @ApiTags('Financiero / Movimientos de Caja')
 @ApiBearerAuth()
 @Controller('movimientos')
-@Roles(Rol.ADMINISTRADOR)
+@Roles(Rol.ADMINISTRADOR, Rol.CONTADOR)
 export class MovimientosController {
   constructor(private readonly service: MovimientosService) {}
 
@@ -48,6 +48,7 @@ export class MovimientosController {
    * se corrigen anulando el recibo asociado (`PATCH /recaudo/recibos/:id/anular`).
    */
   @Patch(':id/reversar')
+  @Roles(Rol.ADMINISTRADOR)
   @AuditAction({ modulo: 'MOVIMIENTOS', accion: 'REVERSAR' })
   reversar(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReversarMovimientoDto, @CurrentUser() usuario: any) {
     return this.service.reversarManual(id, dto.motivo, usuario.email);

@@ -25,9 +25,6 @@ export class Empresa {
   @Column({ type: 'varchar', length: 30, nullable: true })
   telefono: string | null;
 
-  @Column({ type: 'varchar', length: 300, nullable: true })
-  logoUrl: string | null;
-
   // ---- Parámetros globales de negocio ----
   // NOTA: `diasGraciaMora`/`porcentajeMoraMensual` se retiraron de aquí el 2026-09-01 (decisión
   // de negocio: ya no hay costo de mora / interés por retraso). Las columnas físicas

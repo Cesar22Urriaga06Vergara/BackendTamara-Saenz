@@ -63,7 +63,6 @@ describe('Generación de PDF (documentos)', () => {
     slogan: 'Resolvemos tu situación',
     direccion: 'Calle Falsa 123',
     telefono: '3000000000',
-    logoUrl: null as any,
   };
 
   function reciboFake(overrides: Record<string, any> = {}) {

@@ -33,15 +33,8 @@ export class AuthController {
     return this.authService.refrescar(dto.refreshToken);
   }
 
-  @Public()
-  @Post('seed-admin')
-  @HttpCode(HttpStatus.OK)
-  seedAdmin(@Body() dto?: { email?: string; password?: string }) {
-    return this.authService.seedAdmin(dto?.email ?? 'urriagac44@gmail.com', dto?.password ?? 'Cesar2206!');
-  }
-
   @Post('logout')
-  @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA)
+  @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA, Rol.CONTADOR)
   @HttpCode(HttpStatus.NO_CONTENT)
   @AuditAction({ modulo: 'AUTH', accion: 'LOGOUT' })
   logout(@Body() dto: RefreshTokenDto) {
@@ -49,7 +42,7 @@ export class AuthController {
   }
 
   @Post('me')
-  @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA)
+  @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA, Rol.CONTADOR)
   @HttpCode(HttpStatus.OK)
   perfil(@CurrentUser() user: any) {
     return user;
