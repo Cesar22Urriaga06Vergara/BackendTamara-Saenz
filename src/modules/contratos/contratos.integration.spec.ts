@@ -319,13 +319,26 @@ describe('ContratosService (integración) — CONT-04', () => {
     expect(contrato.diaPago).toBe(10);
   });
 
+  it('si la fecha de inicio coincide con el día de pago, el primer canon no se genera en el mismo mes de inicio', async () => {
+    const contrato = await service.crear(await dtoBase('2026-08-15'), 'admin@test.com');
+
+    const canones = await testApp.dataSource
+      .getRepository(Obligacion)
+      .find({ where: { contrato: { id: contrato.id }, tipo: TipoObligacion.CANON }, order: { periodo: 'ASC' } });
+
+    expect(canones[0].periodo.toString().slice(0, 7)).toBe('2026-09');
+    expect(canones.map((c) => c.periodo.toString().slice(0, 7))).not.toContain('2026-08');
+  });
+
   it('genera el canon del contrato desde fechaInicio hasta el horizonte al crearlo (no queda sin obligaciones)', async () => {
     const hoy = new Date();
     // Mes 1 del día ⇒ sin overflow de `setMonth`: contrato que arrancó hace 3 meses.
     const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
     const fechaInicio = `${inicioMes.getFullYear()}-${String(inicioMes.getMonth() + 1).padStart(2, '0')}-05`;
+    const dto = await dtoBase(fechaInicio);
+    dto.diaPago = 20; // evita el caso especial “mismo día de inicio y día de pago”, que no genera el mes de inicio.
 
-    const contrato = await service.crear(await dtoBase(fechaInicio), 'admin@test.com');
+    const contrato = await service.crear(dto, 'admin@test.com');
 
     const canones = await testApp.dataSource
       .getRepository(Obligacion)

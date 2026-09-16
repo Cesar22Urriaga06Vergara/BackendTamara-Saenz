@@ -85,6 +85,14 @@ export class ObligacionesService {
 
     const inicioContrato = this.fechaLocalDesdeColumnaDate(contrato.fechaInicio);
     const primerPeriodo = this.primerDiaMes(inicioContrato);
+    // Regla de negocio: si el contrato arranca exactamente el mismo día del mes que su fecha de
+    // pago, el mes de inicio no se trata como deuda vencida ni como periodo completo ya facturado.
+    // Ej.: contrato desde 15/08 con diaPago=15; el primer canon real se genera para septiembre
+    // (15/09), no para agosto. Esto evita el doble cobro de "mes de arranque + siguiente".
+    const primerPeriodoGenerable =
+      contrato.diaPago === inicioContrato.getDate()
+        ? new Date(inicioContrato.getFullYear(), inicioContrato.getMonth() + 1, 1)
+        : primerPeriodo;
     // "Hoy" en la zona de negocio (Bogotá), no el del proceso: así la generación nocturna no
     // salta de mes cuando el contenedor está en UTC.
     const hoy = this.fechaLocalDesdeColumnaDate(hoyNegocioISO());
@@ -93,7 +101,7 @@ export class ObligacionesService {
 
     let generadas = 0;
     for (
-      let periodo = new Date(primerPeriodo);
+      let periodo = new Date(primerPeriodoGenerable);
       periodo.getTime() <= ultimoPeriodo.getTime();
       periodo = new Date(periodo.getFullYear(), periodo.getMonth() + 1, 1)
     ) {
