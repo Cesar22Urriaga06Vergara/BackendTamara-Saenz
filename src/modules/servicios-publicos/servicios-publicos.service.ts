@@ -51,6 +51,9 @@ export class ServiciosPublicosService {
     if (filtro.tipoServicio) {
       qb.andWhere('r.tipoServicio = :tipoServicio', { tipoServicio: filtro.tipoServicio });
     }
+    if (filtro.inmuebleId) {
+      qb.andWhere('r.inmuebleId = :inmuebleId', { inmuebleId: filtro.inmuebleId });
+    }
 
     return paginar(qb, filtro.page, filtro.limit);
   }
