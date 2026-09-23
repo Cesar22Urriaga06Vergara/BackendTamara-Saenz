@@ -9,11 +9,21 @@ import { InmueblesModule } from '../inmuebles/inmuebles.module';
 import { EmpresaModule } from '../empresa/empresa.module';
 import { ObligacionesModule } from '../obligaciones/obligaciones.module';
 import { NovedadesModule } from '../novedades/novedades.module';
+import { EntrevistasArrendamientoModule } from '../entrevistas-arrendamiento/entrevistas-arrendamiento.module';
+import { PdfEntrevistaArrendamientoService } from './pdf-entrevista-arrendamiento.service';
 
 @Module({
-  imports: [RecaudoModule, ContratosModule, InmueblesModule, EmpresaModule, ObligacionesModule, NovedadesModule],
+  imports: [
+    RecaudoModule,
+    ContratosModule,
+    InmueblesModule,
+    EmpresaModule,
+    ObligacionesModule,
+    NovedadesModule,
+    EntrevistasArrendamientoModule,
+  ],
   controllers: [DocumentosController],
-  providers: [PdfReciboService, PdfNovedadService, ExcelReportesService],
-  exports: [PdfReciboService, PdfNovedadService, ExcelReportesService],
+  providers: [PdfReciboService, PdfNovedadService, PdfEntrevistaArrendamientoService, ExcelReportesService],
+  exports: [PdfReciboService, PdfNovedadService, PdfEntrevistaArrendamientoService, ExcelReportesService],
 })
 export class DocumentosModule {}

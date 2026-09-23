@@ -16,6 +16,8 @@ import { Rol } from '../../common/enums/roles.enum';
 import { AuditAction } from '../../common/decorators/audit-action.decorator';
 import { FiltroReporteNovedadDto } from './dto/filtro-reporte-novedad.dto';
 import { ImpactoFinanciero } from '../novedades/entities/novedad.entity';
+import { EntrevistasArrendamientoService } from '../entrevistas-arrendamiento/entrevistas-arrendamiento.service';
+import { PdfEntrevistaArrendamientoService } from './pdf-entrevista-arrendamiento.service';
 
 /** Emisión de documentos oficiales (PDF/Excel) — EXCLUSIVO Administrador, salvo el recibo de reporte de novedad (operativo). */
 @ApiTags('Documentos (PDF / Excel)')
@@ -33,6 +35,8 @@ export class DocumentosController {
     private readonly empresaService: EmpresaService,
     private readonly obligacionesService: ObligacionesService,
     private readonly novedadesService: NovedadesService,
+    private readonly entrevistasService: EntrevistasArrendamientoService,
+    private readonly pdfEntrevista: PdfEntrevistaArrendamientoService,
   ) {}
 
   /** Recibo de reporte de novedad — control interno, SIN impacto financiero. Accesible a Recepcionista (quien registra la novedad). */
@@ -62,6 +66,18 @@ export class DocumentosController {
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${recibo.consecutivo}.pdf"`);
+    res.send(buffer);
+  }
+
+  @Get('entrevistas-arrendamiento/:id/pdf')
+  @Roles(Rol.ADMINISTRADOR, Rol.RECEPCIONISTA)
+  @AuditAction({ modulo: 'DOCUMENTOS', accion: 'DESCARGAR_ENTREVISTA_ARRENDAMIENTO_PDF' })
+  async descargarEntrevistaPdf(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const entrevista = await this.entrevistasService.obtener(id);
+    const empresa = await this.empresaService.obtener();
+    const buffer = await this.pdfEntrevista.generar(entrevista, empresa);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${entrevista.consecutivo}.pdf"`);
     res.send(buffer);
   }
 

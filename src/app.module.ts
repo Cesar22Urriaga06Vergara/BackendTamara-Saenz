@@ -16,6 +16,7 @@ import { InmueblesModule } from './modules/inmuebles/inmuebles.module';
 import { PropietariosModule } from './modules/propietarios/propietarios.module';
 import { ContratosModule } from './modules/contratos/contratos.module';
 import { NovedadesModule } from './modules/novedades/novedades.module';
+import { EntrevistasArrendamientoModule } from './modules/entrevistas-arrendamiento/entrevistas-arrendamiento.module';
 import { MovimientosModule } from './modules/movimientos/movimientos.module';
 import { CajaModule } from './modules/caja/caja.module';
 import { ObligacionesModule } from './modules/obligaciones/obligaciones.module';
@@ -114,6 +115,7 @@ function nivelDeLog(): string {
     PropietariosModule,
     ContratosModule,
     NovedadesModule,
+    EntrevistasArrendamientoModule,
     MovimientosModule,
     CajaModule,
     ObligacionesModule,

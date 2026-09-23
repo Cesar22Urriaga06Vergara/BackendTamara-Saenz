@@ -16,5 +16,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 EXPOSE 3010
-# `nest build` con tsconfig.build.json emite dist/main.js (sin prefijo src/).
-CMD ["node", "dist/main"]
+# Ejecuta migraciones pendientes contra Aiven antes de levantar la API. Si una migración falla,
+# el contenedor no arranca y Render muestra el error en el deploy en vez de servir un esquema parcial.
+CMD ["npm", "run", "start:prod"]
