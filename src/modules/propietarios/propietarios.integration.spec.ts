@@ -1,6 +1,7 @@
 import { InmueblesService } from '../inmuebles/inmuebles.service';
 import { PropietariosService } from './propietarios.service';
 import { CreateInmuebleDto } from '../inmuebles/dto/create-inmueble.dto';
+import { RestaurarPropietarioInmobiliaria1786980000000 } from '../../database/migrations/1786980000000-RestaurarPropietarioInmobiliaria';
 import { Rol } from '../../common/enums/roles.enum';
 import {
   bootstrapTestApp,
@@ -43,6 +44,23 @@ describe('Propietario (integración) — PROP-01', () => {
     expect(conPropietario.propietario).toBeDefined();
     expect(conPropietario.propietario.esInmobiliaria).toBe(true);
     expect(conPropietario.propietario.nombre).toBe('INMOBILIARIA');
+  });
+
+  it('restaura INMOBILIARIA si falta y permite crear el inmueble', async () => {
+    await testApp.dataSource.getRepository('propietario').delete({ esInmobiliaria: true });
+
+    const queryRunner = testApp.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      await new RestaurarPropietarioInmobiliaria1786980000000().up(queryRunner);
+    } finally {
+      await queryRunner.release();
+    }
+
+    const inmueble = await inmuebles.crear(dtoInmueble());
+    const conPropietario = await inmuebles.obtener(inmueble.id);
+    expect(conPropietario.propietario.esInmobiliaria).toBe(true);
+    expect(await testApp.dataSource.getRepository('propietario').count({ where: { esInmobiliaria: true } })).toBe(1);
   });
 
   it('crear un inmueble con propietarioId explícito lo asocia a ESE propietario, no a INMOBILIARIA', async () => {

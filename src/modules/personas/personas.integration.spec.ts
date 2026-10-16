@@ -38,6 +38,15 @@ describe('PersonasServiceBase (integración) — Clientes/Codeudores', () => {
     expect(cliente.activo).toBe(true);
   });
 
+  it('crea clientes y codeudores sin depender del propietario especial de inmuebles', async () => {
+    const propietarios = testApp.dataSource.getRepository('propietario');
+    expect(await propietarios.count({ where: { esInmobiliaria: true } })).toBe(0);
+
+    await expect(clientes.crear(dtoPersona({ numeroDocumento: 'cliente-sin-seed' }))).resolves.toBeDefined();
+    await expect(codeudores.crear(dtoPersona({ numeroDocumento: 'codeudor-sin-seed' }))).resolves.toBeDefined();
+    expect(await propietarios.count({ where: { esInmobiliaria: true } })).toBe(0);
+  });
+
   it('rechaza crear un cliente con un numeroDocumento ya existente', async () => {
     await clientes.crear(dtoPersona({ numeroDocumento: '111' }));
 
